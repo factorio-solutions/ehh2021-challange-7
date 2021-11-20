@@ -88,7 +88,7 @@ if __name__ == '__main__':
 
     # Similarly get the 5th and 95th percentiles
     lat_samples = output.rsample(torch.Size([100])).exp()
-    samples_expanded = model.gp.likelihood(lat_samples).rsample(torch.Size([100]))
+    samples_expanded = model.gp.likelihood(lat_samples).sample(torch.Size([100]))
     samples = samples_expanded.view(samples_expanded.size(0)*samples_expanded.size(1), -1)
 
     # Similarly get the 5th and 95th percentiles
