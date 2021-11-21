@@ -2,45 +2,46 @@ import datetime
 from pathlib import Path
 
 import pandas as pd
-import numpy as np
 import torch
+import pickle
+
 from factorio.gpmodels.gplognormpl import LogNormGPpl
 from factorio.utils import data_loader
 from factorio.utils.helpers import percentiles_from_samples
 
 
-class Oracle():
+class Oracle:
     def __init__(self,
                  model_path,
-                 dsfactory: data_loader.DataFactory) -> None:
+                 dsfactory: data_loader.OnlineFactory) -> None:
         self.dsfactory = dsfactory
         # X_mins, X_maxs = dfactory.get_min_max()
         self.model = LogNormGPpl.load_model(model_path)
+        with open('mnt/scaler.pkl', 'rb') as fid:
+            self.dsfactory.scaler = pickle.load(fid)
         self.model.eval()
 
-    def get_current_prediction(self, horizont: int = 2):
-        current_data = self.dsfactory.get_future_data(horizont)
 
-        c_date = datetime.datetime.now()
-        to_past = 23 - horizont
-        index = pd.date_range(start=c_date - datetime.timedelta(hours=to_past),
-                            end=c_date + datetime.timedelta(hours=horizont),
-                            freq=f"{60}min")
+def get_current_prediction(model, dsfactory, horizont: int = 2):
+    c_date = datetime.datetime.now()
+    current_data = dsfactory.get_future_data(c_date, horizont)
+    print('Ahoj')
+    c_date = datetime.datetime.now()
+    to_past = 23 - horizont
+    index = pd.date_range(start=c_date - datetime.timedelta(hours=to_past),
+                          end=c_date + datetime.timedelta(hours=horizont),
+                          freq=f"{60}min")
 
-        with torch.no_grad():
-            output = self.model(current_data)
-        rate_samples = output.rsample(torch.Size([1000])).exp()
-        # rate_samples = self.model.gp.likelihood(lat_samples).sample(torch.Size([30])).exp()
-        # samples = samples_expanded.view(samples_expanded.size(0)*samples_expanded.size(1), -1)
+    with torch.no_grad():
+        output = model(current_data)
+    rate_samples = output.rsample(torch.Size([1000])).exp()
 
-        # Similarly get the 5th and 95th percentiles
-        # lower, fn_mean, upper = percentiles_from_samples(lat_samples, [.001, 0.5, 0.8])
-        percentile, = percentiles_from_samples(rate_samples, [0.8])
-
-        return pd.DataFrame(percentile,  # np.abs(np.random.randn(24, 1)),
-                            columns=['Arrivals Hourly Rate'],
-                            index=[pd.to_datetime(date) for date in index]
-                            )
+    percentile, = percentiles_from_samples(rate_samples, [0.8])
+    print('Ted tady')
+    return pd.DataFrame(percentile,  # np.abs(np.random.randn(24, 1)),
+                        columns=['Arrivals Hourly Rate'],
+                        index=[pd.to_datetime(date) for date in index]
+                        )
 
 
 if __name__ == '__main__':
@@ -78,11 +79,10 @@ if __name__ == '__main__':
                                        data_folder=hack_config.data_folder,
                                        dtype=dtype)
 
-
     ora = Oracle(load_path, dfactory)
     df = ora.get_current_prediction()
     print(df)
-    
+
     # X_mins, X_maxs = dfactory.get_min_max()
 
     # my_inducing_pts = torch.stack([
@@ -102,7 +102,7 @@ if __name__ == '__main__':
     # Similarly get the 5th and 95th percentiles
     lat_samples = output.rsample(torch.Size([30])).exp()
     samples_expanded = model.gp.likelihood(lat_samples).sample(torch.Size([30]))
-    samples = samples_expanded.view(samples_expanded.size(0)*samples_expanded.size(1), -1)
+    samples = samples_expanded.view(samples_expanded.size(0) * samples_expanded.size(1), -1)
 
     # Similarly get the 5th and 95th percentiles
     # samples = model.gp.likelihood(output.mean).rsample(torch.Size([1000]))
