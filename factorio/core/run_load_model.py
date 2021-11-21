@@ -25,7 +25,6 @@ class Oracle:
 def get_current_prediction(model, dsfactory, horizont: int = 2):
     c_date = datetime.datetime.now()
     current_data = dsfactory.get_future_data(c_date, horizont)
-    print('Ahoj')
     c_date = datetime.datetime.now()
     to_past = 23 - horizont
     index = pd.date_range(start=c_date - datetime.timedelta(hours=to_past),
@@ -37,7 +36,6 @@ def get_current_prediction(model, dsfactory, horizont: int = 2):
     rate_samples = output.rsample(torch.Size([1000])).exp()
 
     percentile, = percentiles_from_samples(rate_samples, [0.8])
-    print('Ted tady')
     return pd.DataFrame(percentile,  # np.abs(np.random.randn(24, 1)),
                         columns=['Arrivals Hourly Rate'],
                         index=[pd.to_datetime(date) for date in index]

@@ -12,7 +12,16 @@ sys.path.extend(['/home/petr/Projects/ehh2021-challange-7'])
 from factorio.core.run_load_model import Oracle, get_current_prediction
 from factorio.utils import data_loader
 
-st.title('Patient Arrival Prediction')
+st.set_page_config(
+    page_title="Patient Arrival Prediction",
+    page_icon=":hearth:",
+    layout="centered",
+    # menu_items={
+    #     'Get Help': 'https://www.extremelycoolapp.com/help',
+    #     'Report a bug': "https://www.extremelycoolapp.com/bug",
+    #     'About': "# This is a header. This is an *extremely* cool app!"
+    # }
+)
 
 count = st_autorefresh(interval=900000, limit=1000, key="fizzbuzzcounter")
 dtype = torch.float
@@ -54,7 +63,8 @@ ora = create_ora()
 
 c_date = datetime.datetime.now()
 st.subheader('Predict future hour!')
-hour = st.slider('To Future', 0, 23, 2)
+hour = st.slider('Prediction Window', 0, 23, 2)
+
 df = get_current_prediction(ora.model, ora.dsfactory, hour)
 df.index.name = 'Datetime'
 fig = px.bar(df)
@@ -64,4 +74,6 @@ fig.add_vrect(x0=c_date, x1=c_date + datetime.timedelta(minutes=5),
 
 fig.update_yaxes(title='y', visible=False, showticklabels=False)
 fig.update_xaxes(title='', visible=True, showticklabels=False)
+fig.update_layout(showlegend=False,
+                  margin=dict(l=0, r=0, t=0, b=0, pad=4))
 st.plotly_chart(fig, use_container_width=True)
