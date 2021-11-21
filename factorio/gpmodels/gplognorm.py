@@ -99,15 +99,14 @@ class LogNormLikelihood(gpytorch.likelihoods.Likelihood):
         # self.register_parameter("variational_cluster_logits", torch.nn.Parameter(torch.randn(num_tasks, num_clusters)))
 
         # # The Gaussian observational noise
-        self.register_parameter("raw_noise", torch.nn.Parameter(torch.tensor(-2.5)))
+        # self.register_parameter("raw_noise", torch.nn.Parameter(torch.tensor(-2.5)))
 
     def forward(self, function_samples):
         locs = function_samples.exp()
-        # Now we return the observational distribution, based on the function_samples and cluster_assignment_samples
-        res = pyro.distributions.Normal(
-            loc=locs,
-            scale=self.raw_noise.exp()
-        )
+        # Now we return the observational distribution
+        res = pyro.distributions.torch.Poisson(rate=locs)
+        # res = pyro.distributions.Exponential(locs.reciprocal())
+        
         return res
 
 

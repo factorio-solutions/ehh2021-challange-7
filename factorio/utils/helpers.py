@@ -111,10 +111,10 @@ def percentiles_from_samples(samples, percentiles=[0.05, 0.5, 0.95]):
     percentile_samples = [samples[int(num_samples * percentile)] for percentile in percentiles]
 
     # Smooth the samples
-    kernel = torch.full((1, 1, 5), fill_value=0.2)
-    percentiles_samples = [
-        torch.nn.functional.conv1d(percentile_sample.view(1, 1, -1), kernel, padding=2).view(-1)
-        for percentile_sample in percentile_samples
-    ]
+    # kernel = torch.full((1, 1, 5), fill_value=0.2)
+    # percentiles_samples = [
+    #     torch.nn.functional.conv1d(percentile_sample.view(1, 1, -1), kernel, padding=2).view(-1)
+    #     for percentile_sample in percentile_samples
+    # ]
 
-    return percentiles_samples
+    return percentile_samples
