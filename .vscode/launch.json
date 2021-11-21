@@ -1,0 +1,39 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "With 3rd party code",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "Train model",
+            "type": "python",
+            "request": "launch",
+            "program": "factorio/core/run_training_model.py",
+            "console": "integratedTerminal",
+            "args": ["-c", "mnt/config.ini", "-o", "mnt/mdl.pth"]
+        },
+        {
+            "name": "Load model",
+            "type": "python",
+            "request": "launch",
+            "program": "factorio/core/run_load_model.py",
+            "console": "integratedTerminal",
+            "args": ["-c", "mnt/config.ini", "-i", "mnt/mdl.pth"]
+        }
+    ]
+}
