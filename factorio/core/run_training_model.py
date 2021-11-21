@@ -10,6 +10,8 @@ from torch.distributions.poisson import Poisson
 from torch.utils.data import DataLoader
 from torch.utils.data import TensorDataset, Subset
 # from factorio.gpmodels.gppoissonpl import RateGPpl, fit
+import pickle
+
 from factorio.gpmodels.gplognormpl import LogNormGPpl, fit
 from factorio.utils import data_loader
 from factorio.utils.helpers import percentiles_from_samples
@@ -77,6 +79,8 @@ if __name__ == '__main__':
         use_gpu=hack_config.use_gpu)
 
     model.save_model(output_path)
+    with open('mnt/scaler.pkl', 'wb') as fid:
+        pickle.dump(dfactory.scaler, fid)
 
     test_x = dfactory.dset[-200:][0]
     real_x = dfactory.inverse_transform(test_x)
@@ -87,15 +91,14 @@ if __name__ == '__main__':
         output = model(test_x)
 
     # Similarly get the 5th and 95th percentiles
-    lat_samples = output.rsample(torch.Size([1000])).exp()
+    lat_samples = output.rsample(torch.Size([100])).exp()
+    samples_expanded = model.gp.likelihood(lat_samples).sample(torch.Size([100]))
+    samples = samples_expanded.view(samples_expanded.size(0) * samples_expanded.size(1), -1)
 
     # Similarly get the 5th and 95th percentiles
-    samples = model.gp.likelihood(output.mean).rsample(torch.Size([1000]))
-    lower, fn_mean, upper = percentiles_from_samples(lat_samples, [.16, 0.5, 0.84])
-    # lower, upper = output.confidence_region()
-    fn_mean = output.mean.exp()
+    lower, fn_mean, upper = percentiles_from_samples(lat_samples)
 
-    y_sim_lower, y_sim_mean, y_sim_upper = percentiles_from_samples(samples, [.25, 0.5, 0.75])
+    y_sim_lower, y_sim_mean, y_sim_upper = percentiles_from_samples(samples)
 
     # visualize the result
     fig, (ax_func, ax_samp) = plt.subplots(1, 2, figsize=(12, 3))

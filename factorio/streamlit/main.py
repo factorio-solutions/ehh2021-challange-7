@@ -1,65 +1,79 @@
 import datetime
+from pathlib import Path
 
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
-import pandas as pd
-import numpy as np
 import plotly.express as px
+import argparse
+import torch
+import sys
 
-DATE_COLUMN = 'date/time'
-DATA_URL = ('https://s3-us-west-2.amazonaws.com/'
-            'streamlit-demo-data/uber-raw-data-sep14.csv.gz')
+sys.path.extend(['/home/petr/Projects/ehh2021-challange-7'])
+from factorio.core.run_load_model import Oracle, get_current_prediction
+from factorio.utils import data_loader
 
-st.title('Patient Arrival Prediction')
+st.set_page_config(
+    page_title="Patient Arrival Prediction",
+    page_icon=":hearth:",
+    layout="centered",
+    # menu_items={
+    #     'Get Help': 'https://www.extremelycoolapp.com/help',
+    #     'Report a bug': "https://www.extremelycoolapp.com/bug",
+    #     'About': "# This is a header. This is an *extremely* cool app!"
+    # }
+)
 
 count = st_autorefresh(interval=900000, limit=1000, key="fizzbuzzcounter")
+dtype = torch.float
+parser = argparse.ArgumentParser()
+
+path_parser = parser.add_argument('-c', '--config', type=Path, default='config.ini',
+                                  help='Set path to your config.ini file.')
+path_parser = parser.add_argument('-i', '--input', type=Path, default='mnt/model_state.pth',
+                                  help='Set path to save trained model.')
+
+args = parser.parse_args()
+if not args.config.exists():
+    raise argparse.ArgumentError(path_parser, f"Config file doesn't exist! Invalid path: {args.config} "
+                                              f"to config.ini file, please check it!")
+load_path = args.input
 
 
-@st.cache
-def load_data(nrows):
-    data = pd.read_csv(DATA_URL, nrows=nrows)
-    lowercase = lambda x: str(x).lower()
-    data.rename(lowercase, axis='columns', inplace=True)
-    data[DATE_COLUMN] = pd.to_datetime(data[DATE_COLUMN])
-    return data
+@st.cache(hash_funcs={torch.nn.parameter.Parameter: lambda parameter: parameter.data.numpy()},
+          allow_output_mutation=True)
+def get_factory():
+    hack_config = data_loader.HackConfig.from_config(args.config)
+    return data_loader.OnlineFactory(data_frequency=hack_config.data_frequency,
+                                     teams=hack_config.teams,
+                                     hospital=hack_config.hospital,
+                                     data_folder=hack_config.data_folder,
+                                     dtype=dtype)
 
 
-# Create a text element and let the reader know the data is loading.
-data_load_state = st.text('Loading data...')
-# Load 10,000 rows of data into the dataframe.
-data = load_data(10000)
-# Notify the reader that the data was successfully loaded.
-data_load_state.text("Done! (using st.cache)")
+dfactory = get_factory()
 
-if st.button('Show raw data'):
-    st.subheader('Raw data')
-    st.write(data)
+
+@st.cache(hash_funcs={torch.nn.parameter.Parameter: lambda parameter: parameter.data.numpy()},
+          allow_output_mutation=True)
+def create_ora():
+    return Oracle(load_path, dfactory)
+
+
+ora = create_ora()
 
 c_date = datetime.datetime.now()
-st.subheader('Number of pickups by hour')
-hour = st.slider('To Future', 0, 23, 17)
+st.subheader('Predict future hour!')
+hour = st.slider('Prediction Window', 0, 23, 2)
 
-to_past = 23 - hour
-index = pd.date_range(start=c_date - datetime.timedelta(hours=to_past),
-                      end=c_date + datetime.timedelta(hours=hour),
-                      freq=f"{60}min")
-
-hist_values = pd.DataFrame(np.abs(np.random.randn(24, 1)),
-                           columns=['Arrivals'],
-                           index=[pd.to_datetime(date) for date in index]
-                           )
-hist_values.index.name = 'Datetime'
-width = [1 for i in range(24)]
-fig = px.bar(hist_values)
+df = get_current_prediction(ora.model, ora.dsfactory, hour)
+df.index.name = 'Datetime'
+fig = px.bar(df)
 fig.add_vrect(x0=c_date, x1=c_date + datetime.timedelta(minutes=5),
               annotation_text="Current time", annotation_position="top left",
               fillcolor="black", opacity=0.5, line_width=0)
 
 fig.update_yaxes(title='y', visible=False, showticklabels=False)
+fig.update_xaxes(title='', visible=True, showticklabels=False)
+fig.update_layout(showlegend=False,
+                  margin=dict(l=0, r=0, t=0, b=0, pad=4))
 st.plotly_chart(fig, use_container_width=True)
-
-# Some number in the range 0-23
-filtered_data = data[data[DATE_COLUMN].dt.hour == hour]
-
-st.subheader('Map of all pickups at %s:00' % hour)
-st.map(filtered_data)
