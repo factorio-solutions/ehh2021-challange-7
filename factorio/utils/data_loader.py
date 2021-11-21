@@ -25,8 +25,7 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 
 class DataFactory:
-    @st.cache
-    def __init__(self, data, data_frequency, hospital, teams, data_folder, dtype=torch.float):
+    def __init__(self, data_frequency, hospital, teams, data_folder, dtype=torch.float):
         self.teams = teams
         self.hospital = hospital
         self.data_frequency = data_frequency
@@ -57,6 +56,7 @@ class DataFactory:
         # end_date = pd.to_datetime(hour_rate.index.values[-1])
         x = self.load_weather(start_date=self.start_date,
                               end_date=self.end_date).to(dtype=dtype)
+        self.cases = hour_rate
         y = torch.as_tensor(hour_rate['cases'].values).to(dtype=dtype)
         return TensorDataset(x, y)
 
@@ -83,6 +83,7 @@ class DataFactory:
         selected_data = selected_data.join(apple['apple'])
         selected_data = selected_data.join(incidence['incidence_7_100000'])
         selected_data.fillna(0, inplace=True)
+        self.data = selected_data
         self.scaler.fit(selected_data.values)
         transformed_values = self.scaler.transform(selected_data.values)
         return torch.as_tensor(transformed_values)
@@ -253,6 +254,63 @@ class OnlineFactory:
         df = df.join(apple['apple'])
         df = df.join(incidence['incidence_7_100000'])
         return torch.as_tensor(self.scaler.transform(df.values)).to(dtype)
+
+    def get_past_data(self, c_date, hour: int = 2, to_past: int = 168, dtype=torch.float):
+        h_weather = HistoricalWeather()
+        index = pd.date_range(start=c_date - datetime.timedelta(hours=to_past),
+                              end=c_date + datetime.timedelta(hours=hour),
+                              freq=f"{self.data_frequency}min")
+        index = [pd.to_datetime(date) for date in index]
+        football_data = pd.DataFrame.from_dict(self.football.get_visitors(index[0] - datetime.timedelta(days=365),
+                                                                          index[-1] + datetime.timedelta(days=1)),
+                                               orient='index').loc[index[0] + datetime.timedelta(hours=1):index[-1]]
+        google, apple, waze = self.__load_mobility(index[0] - datetime.timedelta(days=7),
+                                                   index[-1] - datetime.timedelta(days=7))
+        incidence = self.__load_incidence(index[0] - datetime.timedelta(days=7),
+                                          index[-1] - datetime.timedelta(days=7))
+        data = h_weather.get_temperature(c_date - datetime.timedelta(hours=to_past),
+                                         c_date + datetime.timedelta(hours=hour))
+        df = data[['temp', 'rhum', 'pres']]
+        df.insert(0, 'hour', df.index.hour)
+        df.insert(1, 'day in week', df.index.weekday)
+        df.insert(2, 'month', df.index.month)
+        df.reset_index(drop=True, inplace=True)
+        football_data.reset_index(drop=True, inplace=True)
+        google.reset_index(drop=True, inplace=True)
+        apple.reset_index(drop=True, inplace=True)
+        waze.reset_index(drop=True, inplace=True)
+        incidence.reset_index(drop=True, inplace=True)
+        df = df.join(football_data)
+        df = df.join(google[['retail_and_recreation_percent_change_from_baseline',
+                             'residential_percent_change_from_baseline']])
+
+        df = df.join(waze['waze'])
+        df = df.join(apple['apple'])
+        df = df.join(incidence['incidence_7_100000'])
+        return torch.as_tensor(self.scaler.transform(df.values)).to(dtype)
+
+    def create_timestamp(self, dtype=torch.float):
+        time_data = self.__load_ikem_data()
+
+        tmp_array = np.full((time_data.shape[0], 1), 0)
+        time_data.insert(0, 'cases', tmp_array)
+        return time_data
+
+    def __load_ikem_data(self):
+        all_files = glob.glob(str(self.data_folder / 'ikem' / "*.xlsx"))
+        li = []
+
+        for filename in all_files:
+            df = pd.read_excel(filename)
+            df['datum a čas'] = pd.to_datetime(df['datum a čas'])
+            df.set_index('datum a čas', inplace=True)
+            li.append(df)
+        this_year = pd.read_html(str(self.data_folder / 'vypis_9074.xls'))[0]
+        this_year['datum a čas'] = pd.to_datetime(this_year['datum a čas'])
+        this_year.set_index('datum a čas', inplace=True)
+        this_year = this_year.drop('Unnamed: 8', axis=1)
+        li.append(this_year['2021-01-01':])
+        return pd.concat(li, axis=0)
 
 
 def load_data(data_path):

@@ -45,8 +45,7 @@ if __name__ == '__main__':
     output_path = args.output
 
     hack_config = data_loader.HackConfig.from_config(args.config)
-    dfactory = data_loader.DataFactory(None,
-                                       hack_config.data_frequency,
+    dfactory = data_loader.DataFactory(data_frequency=hack_config.data_frequency,
                                        teams=hack_config.teams,
                                        hospital=hack_config.hospital,
                                        data_folder=hack_config.data_folder,
