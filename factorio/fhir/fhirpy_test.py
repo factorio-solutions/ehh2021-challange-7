@@ -5,24 +5,22 @@ from fhirpy import AsyncFHIRClient
 async def main():
     # Create an instance
     client = AsyncFHIRClient(
-        'https://fhir.uba1mtf6fx5u.static-test-account.isccloud.io/',
+        'https://fhir.kt1n1r83jp32.static-test-account.isccloud.io/',
         authorization='',
         extra_headers={"Accept": "application/fhir+json",
                        "Content-Type": "application/fhir+json",
-                       "x-api-key": "8AalFGbulBqBCbdFtQXBaA9jNgOKfFN1M4iXzF50"}
+                       "x-api-key": "020kStOlLF7LWx9AXjWrf6M3KMjxd68i5ruIhz4g"}
     )
     # working get patient
     patient = await client.reference('Patient', '8112').to_resource()
 
     new_patient = client.resource(
         'Patient',
-        gender= 'male'
+        gender='male'
     )
     await new_patient.save()
 
     patient2 = await client.reference('Patient', '8113').to_resource()
-
-
 
     # Search for patients
     resources = client.resources('Patient')  # Return lazy search set
