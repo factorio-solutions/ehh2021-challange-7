@@ -8,7 +8,7 @@ import argparse
 import torch
 import sys
 
-sys.path.extend(['/home/petr/Projects/ehh2021-challange-7'])
+sys.path.extend([r'C:\Projects\ehh2021-challange-7'])
 from factorio.core.run_load_model import Oracle, get_current_prediction
 from factorio.utils import data_loader
 
