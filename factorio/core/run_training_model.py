@@ -8,11 +8,13 @@ import pandas as pd
 import torch
 from torch.distributions.poisson import Poisson
 from torch.utils.data import DataLoader
-from torch.utils.data import TensorDataset
-from factorio.gpmodels.gppoissonpl import RateGPpl, fit
+from torch.utils.data import TensorDataset, Subset
+# from factorio.gpmodels.gppoissonpl import RateGPpl, fit
+import pickle
+
+from factorio.gpmodels.gplognormpl import LogNormGPpl, fit
 from factorio.utils import data_loader
 from factorio.utils.helpers import percentiles_from_samples
-
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
@@ -20,11 +22,13 @@ if __name__ == '__main__':
 
     # Move to config at some point
     dtype = torch.float
-    num_inducing = 32
-    num_iter = 1000
+    num_inducing = 64
+    num_iter = 5000
     num_particles = 32
-    loader_batch_size = 512
+    loader_batch_size = 15000
+    learn_inducing_locations = True
     slow_mode = False  # enables checkpointing and logging
+    learning_rate = 0.01
 
     time_now = datetime.datetime.utcnow()
     parser = argparse.ArgumentParser()
@@ -41,22 +45,28 @@ if __name__ == '__main__':
     output_path = args.output
 
     hack_config = data_loader.HackConfig.from_config(args.config)
-    data = data_loader.load_data(hack_config.z_case)
-    dfactory = data_loader.DataFactory(data, hack_config.data_frequency, dtype=dtype)
+    dfactory = data_loader.DataFactory(data_frequency=hack_config.data_frequency,
+                                       teams=hack_config.teams,
+                                       hospital=hack_config.hospital,
+                                       data_folder=hack_config.data_folder,
+                                       dtype=dtype)
 
     X_mins, X_maxs = dfactory.get_min_max()
 
-    my_inducing_pts = torch.stack([
-        torch.linspace(minimum, maximum, num_inducing, dtype=dtype)
-        for minimum, maximum in zip(X_mins, X_maxs)
-    ], dim=-1)
+    dlen = len(dfactory.dset)
     loader = DataLoader(
-        dfactory.dset,
+        # dfactory.dset,
+        Subset(dfactory.dset, torch.arange(dlen - 2000, dlen - 100) - 1),
         batch_size=loader_batch_size,
         shuffle=True
     )
-    model = RateGPpl(inducing_points=my_inducing_pts,
-                     num_particles=num_particles)
+    model = LogNormGPpl(num_inducing=num_inducing,
+                        X_mins=X_mins,
+                        X_maxs=X_maxs,
+                        learn_inducing_locations=learn_inducing_locations,
+                        lr=learning_rate,
+                        num_particles=num_particles,
+                        num_data=dlen)
 
     fit(model,
         train_dataloader=loader,
@@ -64,39 +74,47 @@ if __name__ == '__main__':
         patience=10,
         verbose=False,
         enable_checkpointing=slow_mode,
-        enable_logger=True)
-    
-    model.save_model(output_path)
+        enable_logger=True,
+        use_gpu=hack_config.use_gpu)
 
-    test_x = dfactory.dset[-1000:][0]
-    Y = dfactory.dset[-1000:][1]
+    model.save_model(output_path)
+    with open('mnt/scaler.pkl', 'wb') as fid:
+        pickle.dump(dfactory.scaler, fid)
+
+    test_x = dfactory.dset[-200:][0]
+    real_x = dfactory.inverse_transform(test_x)
+    Y = dfactory.dset[-200:][1]
+    x_plt = torch.arange(Y.size(0)).detach().cpu()
     model.eval()
     with torch.no_grad():
         output = model(test_x)
 
     # Similarly get the 5th and 95th percentiles
-    samples = output(torch.Size([1000]))
-    lower, fn_mean, upper = percentiles_from_samples(samples)
+    lat_samples = output.rsample(torch.Size([100])).exp()
+    samples_expanded = model.gp.likelihood(lat_samples).sample(torch.Size([100]))
+    samples = samples_expanded.view(samples_expanded.size(0) * samples_expanded.size(1), -1)
 
-    y_sim_lower, y_sim_mean, y_sim_upper = percentiles_from_samples(
-        Poisson(samples.exp()).sample())
+    # Similarly get the 5th and 95th percentiles
+    lower, fn_mean, upper = percentiles_from_samples(lat_samples)
+
+    y_sim_lower, y_sim_mean, y_sim_upper = percentiles_from_samples(samples)
 
     # visualize the result
     fig, (ax_func, ax_samp) = plt.subplots(1, 2, figsize=(12, 3))
     line = ax_func.plot(
-        test_x[:, 0], fn_mean.detach().cpu(), label='GP prediction')
+        x_plt, fn_mean.detach().cpu(), label='GP prediction')
     ax_func.fill_between(
-        test_x[:, 0], lower.detach().cpu().numpy(),
+        x_plt, lower.detach().cpu().numpy(),
         upper.detach().cpu().numpy(), color=line[0].get_color(), alpha=0.5
     )
     ax_func.legend()
 
-    ax_samp.scatter(test_x[:, 0], Y, alpha=0.5,
+    ax_samp.scatter(x_plt, Y, alpha=0.5,
                     label='True train data', color='orange')
-    y_sim_plt = ax_samp.plot(test_x[:, 0], y_sim_mean.cpu(
+    y_sim_plt = ax_samp.plot(x_plt, y_sim_mean.cpu(
     ).detach(), alpha=0.5, label='Sample mean from the model')
     ax_samp.fill_between(
-        test_x[:, 0], y_sim_lower.detach().cpu(),
+        x_plt, y_sim_lower.detach().cpu(),
         y_sim_upper.detach().cpu(), color=y_sim_plt[0].get_color(), alpha=0.5
     )
     ax_samp.legend()

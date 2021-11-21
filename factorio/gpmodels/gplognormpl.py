@@ -1,5 +1,5 @@
 import math
-from typing import Tuple, Iterable
+from typing import List, Tuple, Iterable
 import gpytorch
 import pyro
 import torch
@@ -13,27 +13,34 @@ from pytorch_lightning.callbacks import EarlyStopping
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from factorio.gpmodels.gppoisson import RateGP
 from pathlib import Path
+from factorio.gpmodels.gplognorm import LogNormGP
+from factorio.gpmodels.gppoissonpl import RateGPpl
 
 
-class RateGPpl(LightningModule):
+class LogNormGPpl(LightningModule):
     def __init__(self,
-                 inducing_points: torch.Tensor,
-                 name_prefix="mixture_gp",
+                 num_inducing: int,
+                 X_mins: List,
+                 X_maxs: List,
+                 name_prefix="rate_exact_gp",
                  learn_inducing_locations=False,
+                 kernel=None,
                  lr=0.01,
-                 num_particles=64,
-                 kernel=None):
+                 num_particles=32,
+                 num_data=100):
         super().__init__()
         self.automatic_optimization = False
-
-        self.gp = RateGP(inducing_points=inducing_points,
-                         name_prefix=name_prefix,
-                         learn_inducing_locations=learn_inducing_locations,
-                         kernel=kernel)
+        self.gp = LogNormGP(num_inducing=num_inducing,
+                 X_mins=X_mins,
+                 X_maxs=X_maxs,
+                 name_prefix=name_prefix,
+                 learn_inducing_locations=learn_inducing_locations,
+                 kernel=kernel,
+                 num_data=num_data)
         self.lr = lr
         self.num_particles = num_particles
         self.save_hyperparameters()
-
+    
     def forward(self, x):
         output = self.gp(x)
         return output
@@ -57,6 +64,8 @@ class RateGPpl(LightningModule):
         # Output from model
         self.log('train_loss', loss, on_step=False,
                  on_epoch=True, prog_bar=True, logger=True)
+        # self.log('noise_scale', self.gp.likelihood.raw_noise.exp(), on_step=False,
+        #          on_epoch=True, prog_bar=True, logger=True)
         return {'loss': loss, 'log': {'train_loss': loss}}
 
     def eval_performance(self, val_dset: Iterable[Tuple[Dataset, Dataset]]):
@@ -100,8 +109,12 @@ class RateGPpl(LightningModule):
     def load_model(cls, load_path, num_particles=32):
         loaded_state_dict = torch.load(load_path)
         loaded_inducing_points = loaded_state_dict['gp.variational_strategy.inducing_points']
-        model = cls(inducing_points=loaded_inducing_points,
-                        num_particles=num_particles)
+        X_mins = torch.zeros(loaded_inducing_points.size(1))
+        X_maxs = torch.ones(loaded_inducing_points.size(1))
+        model = cls(num_inducing=loaded_inducing_points.size(0),
+                    X_mins=X_mins,
+                    X_maxs=X_maxs,
+                    num_particles=num_particles)
         model.load_state_dict(loaded_state_dict)
         return model
 
@@ -167,7 +180,7 @@ if __name__ == '__main__':
 
 
     num_inducing = 164
-    num_iter = 1
+    num_iter = 1000
     num_particles = 32
     slow_mode = False  # enables checkpointing and logging
     # Generate synthetic data
@@ -194,12 +207,16 @@ if __name__ == '__main__':
     ax_sample.set_title('Observations with Noise')
     plt.show()
 
-    my_inducing_pts = torch.stack([
-        torch.linspace(time_range[0], time_range[1], num_inducing),
-        torch.randn(num_inducing)
-    ], dim=-1)
-    model = RateGPpl(inducing_points=my_inducing_pts,
-                     num_particles=num_particles)
+    # my_inducing_pts = torch.stack([
+    #     torch.linspace(time_range[0], time_range[1], num_inducing),
+    #     torch.randn(num_inducing)
+    # ], dim=-1)
+    X_mins = [0, -1]
+    X_maxs = [3, 1]
+    model = LogNormGPpl(num_inducing=num_inducing,
+                        X_mins=X_mins,
+                        X_maxs=X_maxs,
+                        num_particles=num_particles)
 
     loader = DataLoader(
         TensorDataset(
