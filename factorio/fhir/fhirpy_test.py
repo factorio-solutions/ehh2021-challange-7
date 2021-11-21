@@ -14,6 +14,14 @@ async def main():
     # working get patient
     patient = await client.reference('Patient', '8112').to_resource()
 
+    new_patient = client.resource(
+        'Patient',
+        gender= 'male'
+    )
+    await new_patient.save()
+
+    patient2 = await client.reference('Patient', '8113').to_resource()
+
 
 
     # Search for patients
