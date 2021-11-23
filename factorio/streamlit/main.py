@@ -10,8 +10,9 @@ import plotly.express as px
 import argparse
 import torch
 import sys
+import os
 
-sys.path.extend([r'C:\Projects\ehh2021-challange-7'])
+sys.path.extend([r'C:\Projects\ehh2021-challange-7', os.getcwd()])
 from factorio.core.run_load_model import Oracle, get_current_prediction
 from factorio.utils import data_loader
 

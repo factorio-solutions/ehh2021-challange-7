@@ -1,0 +1,7 @@
+version: "3.3"
+services:
+  zcaseplus:
+    build: ""
+    ports:
+      - "50000:8501"
+    image: factorio/zcaseplus:v0.0.1
