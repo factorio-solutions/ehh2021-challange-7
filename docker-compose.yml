@@ -3,5 +3,5 @@ services:
   zcaseplus:
     build: ""
     ports:
-      - "50000:8501"
-    image: factorio/zcaseplus:v0.0.1
+      - "8501:8501"
+    image:  mi10mod.azurecr.io/zcaseplus:v0.0.2

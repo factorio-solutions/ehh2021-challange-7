@@ -38,29 +38,18 @@ url = "https://fhir.kt1n1r83jp32.static-test-account.isccloud.io"
 
 path_parser = parser.add_argument('-c', '--config', type=Path, default='config.ini',
                                   help='Set path to your config.ini file.')
-path_parser = parser.add_argument('-i', '--input', type=Path, default='mnt/model_state.pth',
-                                  help='Set path to save trained model.')
 
 args = parser.parse_args()
 if not args.config.exists():
     raise argparse.ArgumentError(path_parser, f"Config file doesn't exist! Invalid path: {args.config} "
                                               f"to config.ini file, please check it!")
-load_path = args.input
 
-
-@st.cache
-def load_export():
-    data = pd.read_json(r'C:\Projects\ehh2021-challange-7\mnt\export.json', lines=True)
-    return data
-
-
-zCase_data = load_export()
+hack_config = data_loader.HackConfig.from_config(args.config)
 
 
 @st.cache(hash_funcs={torch.nn.parameter.Parameter: lambda parameter: parameter.data.numpy()},
           allow_output_mutation=True)
 def get_factory():
-    hack_config = data_loader.HackConfig.from_config(args.config)
     return data_loader.OnlineFactory(data_frequency=hack_config.data_frequency,
                                      teams=hack_config.teams,
                                      hospital=hack_config.hospital,
@@ -74,7 +63,7 @@ dfactory = get_factory()
 @st.cache(hash_funcs={torch.nn.parameter.Parameter: lambda parameter: parameter.data.numpy()},
           allow_output_mutation=True)
 def create_ora():
-    return Oracle(load_path, dfactory)
+    return Oracle(hack_config.model_path, dfactory)
 
 
 ora = create_ora()
@@ -95,35 +84,3 @@ fig.update_xaxes(title='', visible=True, showticklabels=False)
 fig.update_layout(showlegend=False,
                   margin=dict(l=0, r=0, t=0, b=0, pad=4))
 st.plotly_chart(fig, use_container_width=True)
-
-if st.button('Get Incoming Patient Data'):
-    patient = zCase_data.loc[np.random.randint(zCase_data.shape[0])]
-    gender_switch = {'M': 'male',
-                     'F': 'female',
-                     'nan': 'unknown'}
-    gender = gender_switch[patient.patient__sex]
-    post_res = requests.post(f"{url}/Patient",
-                             headers=headers_dict,
-                             json={
-                                 "resourceType": "Patient",
-                                 "name": [
-                                     {
-                                         "use": "official",
-                                         "family": patient.patient__lastName,
-                                         "given": [
-                                             patient.patient__firstName
-                                         ]
-                                     },
-
-                                 ],
-                                 "gender": gender
-                             })
-    res = requests.get(post_res.headers['CONTENT-LOCATION'].strip('/1'),
-                       headers=headers_dict)
-    res_data = res.json()
-    tmp = pd.DataFrame.from_dict(res_data['entry'][0]['resource']['name'])
-    tmp.insert(3, 'gender', res_data['entry'][0]['resource']['gender'])
-    tmp.insert(4, 'FIHR ID', res_data['entry'][0]['resource']['id'])
-    tmp.drop('use', axis=1, inplace=True)
-    tmp.insert(3, 'Records', 'No patient records in FHIR')
-    st.dataframe(tmp)

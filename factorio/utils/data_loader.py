@@ -253,7 +253,7 @@ class OnlineFactory:
         df = df.join(waze['waze'])
         df = df.join(apple['apple'])
         df = df.join(incidence['incidence_7_100000'])
-        return torch.as_tensor(self.scaler.transform(df.values)).to(dtype)
+        return torch.as_tensor(np.nan_to_num(self.scaler.transform(df.values))).to(dtype)
 
     def get_past_data(self, c_date, hour: int = 2, to_past: int = 168, dtype=torch.float):
         h_weather = HistoricalWeather()
@@ -287,7 +287,8 @@ class OnlineFactory:
         df = df.join(waze['waze'])
         df = df.join(apple['apple'])
         df = df.join(incidence['incidence_7_100000'])
-        return torch.as_tensor(self.scaler.transform(df.values)).to(dtype)
+        df.fillna(0)
+        return torch.as_tensor(np.nan_to_num(self.scaler.transform(df.values))).to(dtype)
 
     def create_timestamp(self, dtype=torch.float):
         time_data = self.__load_ikem_data()

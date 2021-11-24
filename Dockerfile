@@ -14,8 +14,9 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends build-essent
 
 
 COPY factorio/. /app/factorio
-COPY mnt/. /mnt
+COPY mnt/. /app/mnt
 
 
 EXPOSE 8501
-CMD [ "streamlit", "run", "factorio/streamlit/main.py", "--", "-c", ".factorio/config.ini"]
+ENTRYPOINT ["streamlit", "run"]
+CMD ["factorio/streamlit/main.py", "--", "-c", "factorio/config.ini"]
