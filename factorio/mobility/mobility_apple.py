@@ -1,11 +1,26 @@
+import json
+import urllib.request
+
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime
 
 
 class MobilityApple:
-    def __init__(self,
-                 datafile="applemobilitytrends-2021-11-18.csv"):
-        self.__reports_df = pd.read_csv(datafile)
+    def __init__(self):
+        source = self.get_link()
+        self.__reports_df = pd.read_csv(source)
+
+    @staticmethod
+    def get_link():
+        json_link = "https://covid19-static.cdn-apple.com/covid19-mobility-data/current/v3/index.json"
+        with urllib.request.urlopen(json_link) as url:
+            json_data = json.loads(url.read().decode())
+        link = (
+                "https://covid19-static.cdn-apple.com"
+                + json_data["basePath"]
+                + json_data["regions"]["en-us"]["csvPath"]
+        )
+        return link
 
     def get_mobility(self,
                      start_date=datetime(2020, 8, 31),
@@ -26,7 +41,7 @@ class MobilityApple:
                 month = int(time[1])
                 day = int(time[2])
 
-                for hour in range(0,24):
+                for hour in range(0, 24):
                     date = datetime(year, month, day, hour, 0)
                     if start_date < date < end_date:
                         hourly_mobility[date] = v
@@ -35,9 +50,9 @@ class MobilityApple:
 
 
 if __name__ == '__main__':
+    c_date = datetime.now()
     mobility_apple = MobilityApple()
-    mobility = mobility_apple.get_mobility()
+    mobility = mobility_apple.get_mobility(end_date=c_date)
 
     for date, data in mobility.items():
         print(str(date) + " | " + str(data))
-

@@ -3,9 +3,9 @@ from datetime import datetime, timedelta
 
 
 class MobilityWaze:
-    def __init__(self,
-                 datafile="Waze _ COVID-19 Impact Dashboard_City-Level Data_Table.csv"):
-        self.__reports_df = pd.read_csv(datafile)
+    def __init__(self):
+        url = r'https://raw.githubusercontent.com/ActiveConclusion/waze_mobility_scraper/master/Waze_City-Level_Data.csv'
+        self.__reports_df = pd.read_csv(url)
 
     def get_mobility(self,
                      start_date=datetime(2020, 8, 31),
@@ -35,7 +35,7 @@ class MobilityWaze:
 
 if __name__ == '__main__':
     mobility_waze = MobilityWaze()
-    mobility = mobility_waze.get_mobility()
+    mobility = mobility_waze.get_mobility(end_date=datetime.now())
 
     for date, data in mobility.items():
         print(str(date) + " | " + str(data))

@@ -37,12 +37,10 @@ class DataFactory:
         self.football = Football(self.teams)
         self.g_reports = [str(self.data_folder / '2020_CZ_Region_Mobility_Report.csv'),
                           str(self.data_folder / '2021_CZ_Region_Mobility_Report.csv')]
-        self.a_datafile = str(self.data_folder / 'applemobilitytrends-2021-11-18.csv')
-        self.w_datafile = str(self.data_folder / "Waze _ COVID-19 Impact Dashboard_City-Level Data_Table.csv")
 
         self.google_m = MobilityGoogle(reports=self.g_reports)
-        self.apple_m = MobilityApple(datafile=self.a_datafile)
-        self.waze_m = MobilityWaze(datafile=self.w_datafile)
+        self.apple_m = MobilityApple()
+        self.waze_m = MobilityWaze()
 
         self.dset = self.create_timestamp(dtype=dtype)
 
@@ -189,12 +187,10 @@ class OnlineFactory:
         self.football = Football(self.teams)
         self.g_reports = [str(self.data_folder / '2020_CZ_Region_Mobility_Report.csv'),
                           str(self.data_folder / '2021_CZ_Region_Mobility_Report.csv')]
-        self.a_datafile = str(self.data_folder / 'applemobilitytrends-2021-11-18.csv')
-        self.w_datafile = str(self.data_folder / "Waze _ COVID-19 Impact Dashboard_City-Level Data_Table.csv")
 
         self.google_m = MobilityGoogle(reports=self.g_reports)
-        self.apple_m = MobilityApple(datafile=self.a_datafile)
-        self.waze_m = MobilityWaze(datafile=self.w_datafile)
+        self.apple_m = MobilityApple()
+        self.waze_m = MobilityWaze()
 
     def __load_mobility(self, start_date, end_date):
         google = pd.DataFrame.from_dict(self.google_m.get_mobility(), orient='index')
@@ -334,9 +330,7 @@ if __name__ == '__main__':
                                                   f"to config.ini file, please check it!")
 
     hack_config = HackConfig.from_config(args.config)
-    data_ = load_data(hack_config.z_case)
-    data_loader = DataFactory(data_,
-                              hack_config.data_frequency,
+    data_loader = DataFactory(hack_config.data_frequency,
                               teams=hack_config.teams,
                               hospital=hack_config.hospital,
                               data_folder=hack_config.data_folder)
