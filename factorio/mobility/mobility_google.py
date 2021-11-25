@@ -69,7 +69,7 @@ class MobilityGoogle:
 if __name__ == '__main__':
     mobility_google = MobilityGoogle()
     df = mobility_google.get_df()
-    mobility = mobility_google.get_mobility()
+    mobility_ = mobility_google.get_mobility()
 
-    for date, data in mobility.items():
+    for date, data in mobility_.items():
         print(str(date) + " | " + str(data))

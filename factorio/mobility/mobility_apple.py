@@ -52,7 +52,7 @@ class MobilityApple:
 if __name__ == '__main__':
     c_date = datetime.now()
     mobility_apple = MobilityApple()
-    mobility = mobility_apple.get_mobility(end_date=c_date)
+    mobility_ = mobility_apple.get_mobility(end_date=c_date)
 
-    for date, data in mobility.items():
+    for date, data in mobility_.items():
         print(str(date) + " | " + str(data))
