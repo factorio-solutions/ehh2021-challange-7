@@ -23,12 +23,12 @@ class Oracle:
         self.model.eval()
 
 
-def get_current_prediction(model, dsfactory, horizont: int = 2):
+def get_current_prediction(model, dsfactory, to_future: int = 2):
     c_date = datetime.datetime.now()
-    current_data = dsfactory.get_future_data(c_date, horizont)
-    to_past = 23 - horizont
+    current_data = dsfactory.get_prediction_data(c_date, to_future)
+    to_past = 23 - to_future
     index = pd.date_range(start=c_date - datetime.timedelta(hours=to_past),
-                          end=c_date + datetime.timedelta(hours=horizont),
+                          end=c_date + datetime.timedelta(hours=to_future),
                           freq=f"{60}min")
 
     with torch.no_grad():
@@ -42,10 +42,10 @@ def get_current_prediction(model, dsfactory, horizont: int = 2):
                         )
 
 
-def get_past_prediction(model, dsfactory, past_date, horizont: int = 2, to_past: int = 168):
-    current_data = dsfactory.get_past_data(past_date, horizont, to_past=to_past)
+def get_past_prediction(model, dsfactory, past_date, to_future: int = 2, to_past: int = 168):
+    current_data = dsfactory.get_prediction_data(past_date, to_future, to_past=to_past)
     index = pd.date_range(start=past_date - datetime.timedelta(hours=to_past - 1),
-                          end=past_date + datetime.timedelta(hours=horizont),
+                          end=past_date + datetime.timedelta(hours=to_future),
                           freq=f"{60}min")
 
     with torch.no_grad():

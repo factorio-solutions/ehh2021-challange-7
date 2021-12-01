@@ -65,7 +65,7 @@ class DataFactory:
         data.fillna(0, inplace=True)
         data = data.resample(f'{self.data_frequency}min').ffill()
         selected_data = data[['temp', 'rhum', 'pres']]
-        selected_data.insert(0, 'hour', selected_data.index.hour)
+        selected_data.insert(0, 'to_future', selected_data.index.hour)
         selected_data.insert(1, 'day in week', selected_data.index.weekday)
         selected_data.insert(2, 'month', selected_data.index.month)
 
@@ -156,7 +156,7 @@ class DataFactory:
         data = h_weather.get_temperature(c_date - datetime.timedelta(hours=to_past),
                                          c_date + datetime.timedelta(hours=hour))
         df = data[['temp', 'rhum', 'pres']]
-        df.insert(0, 'hour', df.index.hour)
+        df.insert(0, 'to_future', df.index.hour)
         df.insert(1, 'day in week', df.index.weekday)
         df.insert(2, 'month', df.index.month)
         df.reset_index(drop=True, inplace=True)
@@ -217,11 +217,11 @@ class OnlineFactory:
         data_incidence.set_index('datum', drop=True, inplace=True)
         return data_incidence.resample(f'{self.data_frequency}min').ffill()[start_date:end_date]
 
-    def get_future_data(self, c_date, hour: int = 2, dtype=torch.float):
+    def get_prediction_data(self, c_date, to_future: int = 2, to_past: int = 24, dtype=torch.float):
         h_weather = HistoricalWeather()
-        to_past = 24 - hour
+        to_past -= to_future
         index = pd.date_range(start=c_date - datetime.timedelta(hours=to_past),
-                              end=c_date + datetime.timedelta(hours=hour),
+                              end=c_date + datetime.timedelta(hours=to_future),
                               freq=f"{self.data_frequency}min")
         index = [pd.to_datetime(date) for date in index]
         football_data = pd.DataFrame.from_dict(self.football.get_visitors(index[0] - datetime.timedelta(days=365),
@@ -232,9 +232,9 @@ class OnlineFactory:
         incidence = self.__load_incidence(index[0] - datetime.timedelta(days=7),
                                           index[-1] - datetime.timedelta(days=7))
         data = h_weather.get_temperature(c_date - datetime.timedelta(hours=to_past),
-                                         c_date + datetime.timedelta(hours=hour))
+                                         c_date + datetime.timedelta(hours=to_future))
         df = data[['temp', 'rhum', 'pres']]
-        df.insert(0, 'hour', df.index.hour)
+        df.insert(0, 'to_future', df.index.hour)
         df.insert(1, 'day in week', df.index.weekday)
         df.insert(2, 'month', df.index.month)
         df.reset_index(drop=True, inplace=True)
@@ -250,41 +250,6 @@ class OnlineFactory:
         df = df.join(waze['waze'])
         df = df.join(apple['apple'])
         df = df.join(incidence['incidence_7_100000'])
-        return torch.as_tensor(np.nan_to_num(self.scaler.transform(df.values))).to(dtype)
-
-    def get_past_data(self, c_date, hour: int = 2, to_past: int = 168, dtype=torch.float):
-        h_weather = HistoricalWeather()
-        index = pd.date_range(start=c_date - datetime.timedelta(hours=to_past),
-                              end=c_date + datetime.timedelta(hours=hour),
-                              freq=f"{self.data_frequency}min")
-        index = [pd.to_datetime(date) for date in index]
-        football_data = pd.DataFrame.from_dict(self.football.get_visitors(index[0] - datetime.timedelta(days=365),
-                                                                          index[-1] + datetime.timedelta(days=1)),
-                                               orient='index').loc[index[0] + datetime.timedelta(hours=1):index[-1]]
-        google, apple, waze = self.__load_mobility(index[0] - datetime.timedelta(days=7),
-                                                   index[-1] - datetime.timedelta(days=7))
-        incidence = self.__load_incidence(index[0] - datetime.timedelta(days=7),
-                                          index[-1] - datetime.timedelta(days=7))
-        data = h_weather.get_temperature(c_date - datetime.timedelta(hours=to_past),
-                                         c_date + datetime.timedelta(hours=hour))
-        df = data[['temp', 'rhum', 'pres']]
-        df.insert(0, 'hour', df.index.hour)
-        df.insert(1, 'day in week', df.index.weekday)
-        df.insert(2, 'month', df.index.month)
-        df.reset_index(drop=True, inplace=True)
-        football_data.reset_index(drop=True, inplace=True)
-        google.reset_index(drop=True, inplace=True)
-        apple.reset_index(drop=True, inplace=True)
-        waze.reset_index(drop=True, inplace=True)
-        incidence.reset_index(drop=True, inplace=True)
-        df = df.join(football_data)
-        df = df.join(google[['retail_and_recreation_percent_change_from_baseline',
-                             'residential_percent_change_from_baseline']])
-
-        df = df.join(waze['waze'])
-        df = df.join(apple['apple'])
-        df = df.join(incidence['incidence_7_100000'])
-        df.fillna(0)
         return torch.as_tensor(np.nan_to_num(self.scaler.transform(df.values))).to(dtype)
 
     def create_timestamp(self, dtype=torch.float):
