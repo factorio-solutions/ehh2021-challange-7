@@ -116,6 +116,7 @@ class DataFactory:
         this_year['datum a čas'] = pd.to_datetime(this_year['datum a čas'])
         this_year.set_index('datum a čas', inplace=True)
         this_year = this_year.drop('Unnamed: 8', axis=1)
+        this_year = this_year[this_year['důvod'] != 'kardioverze']
         li.append(this_year['2021-01-01':])
         return pd.concat(li, axis=0)
 

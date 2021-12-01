@@ -18,6 +18,7 @@ from factorio.utils.helpers import percentiles_from_samples
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
+    import matplotlib.dates as mdates
     import argparse
 
     # Move to config at some point
@@ -35,16 +36,15 @@ if __name__ == '__main__':
 
     path_parser = parser.add_argument('-c', '--config', type=Path, default='config.ini',
                                       help='Set path to your config.ini file.')
-    path_parser = parser.add_argument('-o', '--output', type=Path, default='mnt/model_state.pth',
-                                      help='Set path to load saved model.')
-
     args = parser.parse_args()
     if not args.config.exists():
         raise argparse.ArgumentError(path_parser, f"Config file doesn't exist! Invalid path: {args.config} "
                                                   f"to config.ini file, please check it!")
-    output_path = args.output
 
     hack_config = data_loader.HackConfig.from_config(args.config)
+
+    output_path = hack_config.model_path
+
     dfactory = data_loader.DataFactory(data_frequency=hack_config.data_frequency,
                                        teams=hack_config.teams,
                                        hospital=hack_config.hospital,
@@ -80,11 +80,11 @@ if __name__ == '__main__':
     model.save_model(output_path)
     with open('mnt/scaler.pkl', 'wb') as fid:
         pickle.dump(dfactory.scaler, fid)
-
-    test_x = dfactory.dset[-200:][0]
+    show = 200
+    test_x = dfactory.dset[-show:][0]
     real_x = dfactory.inverse_transform(test_x)
-    Y = dfactory.dset[-200:][1]
-    x_plt = torch.arange(Y.size(0)).detach().cpu()
+    Y = dfactory.dset[-show:][1]
+    x_plt = dfactory.data[-show:].index.values
     model.eval()
     with torch.no_grad():
         output = model(test_x)
