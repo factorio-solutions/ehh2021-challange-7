@@ -13,7 +13,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
-import streamlit as st
 from sklearn.preprocessing import MinMaxScaler
 from torch.utils.data import TensorDataset
 
@@ -65,7 +64,7 @@ class DataFactory:
         data.fillna(0, inplace=True)
         data = data.resample(f'{self.data_frequency}min').ffill()
         selected_data = data[['temp', 'rhum', 'pres']]
-        selected_data.insert(0, 'to_future', selected_data.index.hour)
+        selected_data.insert(0, 'hour', selected_data.index.hour)
         selected_data.insert(1, 'day in week', selected_data.index.weekday)
         selected_data.insert(2, 'month', selected_data.index.month)
 
@@ -156,7 +155,7 @@ class DataFactory:
         data = h_weather.get_temperature(c_date - datetime.timedelta(hours=to_past),
                                          c_date + datetime.timedelta(hours=hour))
         df = data[['temp', 'rhum', 'pres']]
-        df.insert(0, 'to_future', df.index.hour)
+        df.insert(0, 'hour', df.index.hour)
         df.insert(1, 'day in week', df.index.weekday)
         df.insert(2, 'month', df.index.month)
         df.reset_index(drop=True, inplace=True)
@@ -234,7 +233,7 @@ class OnlineFactory:
         data = h_weather.get_temperature(c_date - datetime.timedelta(hours=to_past),
                                          c_date + datetime.timedelta(hours=to_future))
         df = data[['temp', 'rhum', 'pres']]
-        df.insert(0, 'to_future', df.index.hour)
+        df.insert(0, 'hour', df.index.hour)
         df.insert(1, 'day in week', df.index.weekday)
         df.insert(2, 'month', df.index.month)
         df.reset_index(drop=True, inplace=True)
