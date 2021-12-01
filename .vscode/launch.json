@@ -25,7 +25,7 @@
             "request": "launch",
             "program": "factorio/core/run_training_model.py",
             "console": "integratedTerminal",
-            "args": ["-c", "mnt/config.ini", "-o", "mnt/mdl.pth"]
+            "args": ["-c", "factorio/config.ini"]
         },
         {
             "name": "Load model",
@@ -33,7 +33,7 @@
             "request": "launch",
             "program": "factorio/core/run_load_model.py",
             "console": "integratedTerminal",
-            "args": ["-c", "mnt/config.ini", "-i", "mnt/mdl.pth"]
+            "args": ["-c", "factorio/config.ini"]
         }
     ]
 }

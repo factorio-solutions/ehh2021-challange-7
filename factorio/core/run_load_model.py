@@ -67,63 +67,39 @@ if __name__ == '__main__':
 
     # Move to config at some point
     dtype = torch.float
-    num_inducing = 32
-    num_iter = 1000
-    num_particles = 32
-    loader_batch_size = 512
-    slow_mode = True  # enables checkpointing and logging
 
     time_now = datetime.datetime.utcnow()
     parser = argparse.ArgumentParser()
 
     path_parser = parser.add_argument('-c', '--config', type=Path, default='config.ini',
                                       help='Set path to your config.ini file.')
-    path_parser = parser.add_argument('-i', '--input', type=Path, default='mnt/model_state.pth',
-                                      help='Set path to save trained model.')
 
     args = parser.parse_args()
     if not args.config.exists():
         raise argparse.ArgumentError(path_parser, f"Config file doesn't exist! Invalid path: {args.config} "
                                                   f"to config.ini file, please check it!")
-    load_path = args.input
 
     hack_config = data_loader.HackConfig.from_config(args.config)
-    dfactory = data_loader.OnlineFactory(data_frequency=hack_config.data_frequency,
+    load_path = hack_config.model_path
+    # dfactory_online = data_loader.OnlineFactory(data_frequency=hack_config.data_frequency,
+    #                                      teams=hack_config.teams,
+    #                                      hospital=hack_config.hospital,
+    #                                      data_folder=hack_config.data_folder,
+    #                                      dtype=dtype)
+
+    dfactory = data_loader.DataFactory(data_frequency=hack_config.data_frequency,
                                          teams=hack_config.teams,
                                          hospital=hack_config.hospital,
                                          data_folder=hack_config.data_folder,
                                          dtype=dtype)
-
-    dfactory_d = data_loader.DataFactory(data_frequency=hack_config.data_frequency,
-                                         teams=hack_config.teams,
-                                         hospital=hack_config.hospital,
-                                         data_folder=hack_config.data_folder,
-                                         dtype=dtype)
-
-    # ora = Oracle(hack_config.model_path, dfactory)
-    # c_date = datetime.datetime.now()
-    # df = get_past_prediction(ora.model, ora.dsfactory, c_date, to_past=24)
-    # # data = dfactory.create_timestamp()
-    # fig, ax = plt.subplots(figsize=(20, 16))
-    # n = 10
-    # # data.loc[datetime.datetime.strptime(df.index[0], "%Y-%m-%d %H-%M-%S"): datetime.datetime.strptime(df.index[-3], "%Y-%m-%d %H-%M-%S")]
-    # # sns.barplot(x=df.index, y=df['Arrivals Hourly Rate'], ax=ax)
-    # df['Arrivals Hourly Rate'].plot(ax=ax, kind='bar')
-    # # kde_data = data.loc[datetime.datetime.strptime(df.index[0], "%Y-%m-%d %H-%M-%S"):]
-    # # ax.plot(kde_data['cases'].rolling(window=10).mean(), 'r', linewidth=3)
-    #
-    # ticks = ax.xaxis.get_ticklocs()
-    # ticklabels = [l.get_text() for l in ax.xaxis.get_ticklabels()]
-    # ax.xaxis.set_ticks(ticks[::n])
-    # ax.xaxis.set_ticklabels(ticklabels[::n])
-    # plt.xticks(rotation=45, ha='right')
-    # plt.show()
 
     model = LogNormGPpl.load_model(hack_config.model_path)
 
-    test_x = dfactory_d.dset[-200:][0]
-    Y = dfactory_d.dset[-200:][1]
-    x_plt = torch.arange(Y.size(0)).detach().cpu()
+    show = 500
+    test_x = dfactory.dset[-show:][0]
+    real_x = dfactory.inverse_transform(test_x)
+    Y = dfactory.dset[-show:][1]
+    x_plt = dfactory.data[-show:].index.values
     model.eval()
     with torch.no_grad():
         output = model(test_x)
@@ -134,10 +110,7 @@ if __name__ == '__main__':
     samples = samples_expanded.view(samples_expanded.size(0) * samples_expanded.size(1), -1)
 
     # Similarly get the 5th and 95th percentiles
-    # samples = model.gp.likelihood(output.mean).rsample(torch.Size([1000]))
     lower, fn_mean, upper = percentiles_from_samples(lat_samples, [.001, 0.5, 0.8])
-    # lower, upper = output.confidence_region()
-    # fn_mean = output.mean.exp()
 
     y_sim_lower, y_sim_mean, y_sim_upper = percentiles_from_samples(samples, [.001, 0.5, 0.8])
 
@@ -160,6 +133,7 @@ if __name__ == '__main__':
         y_sim_upper.detach().cpu(), color=y_sim_plt[0].get_color(), alpha=0.5
     )
     ax_samp.legend()
+    fig.tight_layout()
     plt.show()
 
     print(f'Done')

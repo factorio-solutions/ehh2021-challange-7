@@ -118,6 +118,7 @@ if __name__ == '__main__':
         y_sim_upper.detach().cpu(), color=y_sim_plt[0].get_color(), alpha=0.5
     )
     ax_samp.legend()
+    fig.tight_layout()
     plt.show()
 
     print(f'Done')
