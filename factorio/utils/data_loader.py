@@ -65,6 +65,8 @@ class DataFactory:
         data.fillna(0, inplace=True)
         data = data.resample(f'{self.data_frequency}min').ffill()
         selected_data = data[['temp', 'rhum', 'pres']]
+        selected_data = selected_data.append(selected_data.iloc[-1])
+        selected_data = selected_data.diff()
         selected_data.insert(0, 'hour', selected_data.index.hour)
         selected_data.insert(1, 'day in week', selected_data.index.weekday)
         selected_data.insert(2, 'dayofyear', selected_data.index.dayofyear)
@@ -138,41 +140,41 @@ class DataFactory:
     def inverse_transform(self, X: torch.Tensor):
         return self.scaler.inverse_transform(X.numpy())
 
-    def get_future_data(self, hour: int = 2, dtype=torch.float):
-        c_date = datetime.datetime.now()
-        h_weather = HistoricalWeather()
-        to_past = 24 - hour
-        index = pd.date_range(start=c_date - datetime.timedelta(hours=to_past),
-                              end=c_date + datetime.timedelta(hours=hour),
-                              freq=f"{self.data_frequency}min")
-        index = [pd.to_datetime(date) for date in index]
-        football_data = pd.DataFrame.from_dict(self.football.get_visitors(index[0] - datetime.timedelta(days=365),
-                                                                          index[-1] + datetime.timedelta(days=1)),
-                                               orient='index').loc[index[0] + datetime.timedelta(hours=1):index[-1]]
-        google, apple, waze = self.__load_mobility(index[0] - datetime.timedelta(days=7),
-                                                   index[-1] - datetime.timedelta(days=7))
-        incidence = self.__load_incidence(index[0] - datetime.timedelta(days=7),
-                                          index[-1] - datetime.timedelta(days=7))
-        data = h_weather.get_temperature(c_date - datetime.timedelta(hours=to_past),
-                                         c_date + datetime.timedelta(hours=hour))
-        df = data[['temp', 'rhum', 'pres']]
-        df.insert(0, 'hour', df.index.hour)
-        df.insert(1, 'day in week', df.index.weekday)
-        df.insert(2, 'dayofyear', df.index.dayofyear)
-        df.reset_index(drop=True, inplace=True)
-        football_data.reset_index(drop=True, inplace=True)
-        google.reset_index(drop=True, inplace=True)
-        apple.reset_index(drop=True, inplace=True)
-        waze.reset_index(drop=True, inplace=True)
-        incidence.reset_index(drop=True, inplace=True)
-        df = df.join(football_data)
-        df = df.join(google[['retail_and_recreation_percent_change_from_baseline',
-                             'residential_percent_change_from_baseline']])
+    # def get_future_data(self, hour: int = 2, dtype=torch.float):
+    #     c_date = datetime.datetime.now()
+    #     h_weather = HistoricalWeather()
+    #     to_past = 24 - hour
+    #     index = pd.date_range(start=c_date - datetime.timedelta(hours=to_past),
+    #                           end=c_date + datetime.timedelta(hours=hour),
+    #                           freq=f"{self.data_frequency}min")
+    #     index = [pd.to_datetime(date) for date in index]
+    #     football_data = pd.DataFrame.from_dict(self.football.get_visitors(index[0] - datetime.timedelta(days=365),
+    #                                                                       index[-1] + datetime.timedelta(days=1)),
+    #                                            orient='index').loc[index[0] + datetime.timedelta(hours=1):index[-1]]
+    #     google, apple, waze = self.__load_mobility(index[0] - datetime.timedelta(days=7),
+    #                                                index[-1] - datetime.timedelta(days=7))
+    #     incidence = self.__load_incidence(index[0] - datetime.timedelta(days=7),
+    #                                       index[-1] - datetime.timedelta(days=7))
+    #     data = h_weather.get_temperature(c_date - datetime.timedelta(hours=to_past),
+    #                                      c_date + datetime.timedelta(hours=hour))
+    #     df = data[['temp', 'rhum', 'pres']]
+    #     df.insert(0, 'hour', df.index.hour)
+    #     df.insert(1, 'day in week', df.index.weekday)
+    #     df.insert(2, 'dayofyear', df.index.dayofyear)
+    #     df.reset_index(drop=True, inplace=True)
+    #     football_data.reset_index(drop=True, inplace=True)
+    #     google.reset_index(drop=True, inplace=True)
+    #     apple.reset_index(drop=True, inplace=True)
+    #     waze.reset_index(drop=True, inplace=True)
+    #     incidence.reset_index(drop=True, inplace=True)
+    #     df = df.join(football_data)
+    #     df = df.join(google[['retail_and_recreation_percent_change_from_baseline',
+    #                          'residential_percent_change_from_baseline']])
 
-        df = df.join(waze['waze'])
-        df = df.join(apple['apple'])
-        df = df.join(incidence['incidence_7_100000'])
-        return torch.as_tensor(self.scaler.transform(df.values)).to(dtype)
+    #     df = df.join(waze['waze'])
+    #     df = df.join(apple['apple'])
+    #     df = df.join(incidence['incidence_7_100000'])
+    #     return torch.as_tensor(self.scaler.transform(df.values)).to(dtype)
 
 
 class OnlineFactory:
@@ -236,6 +238,9 @@ class OnlineFactory:
         data = h_weather.get_temperature(c_date - datetime.timedelta(hours=to_past),
                                          c_date + datetime.timedelta(hours=to_future))
         df = data[['temp', 'rhum', 'pres']]
+        
+        df = df.append(df.iloc[-1])
+        df = df.diff()
         df.insert(0, 'hour', df.index.hour)
         df.insert(1, 'day in week', df.index.weekday)
         df.insert(2, 'dayofyear', df.index.dayofyear)
@@ -303,6 +308,6 @@ if __name__ == '__main__':
                               hospital=hack_config.hospital,
                               data_folder=hack_config.data_folder)
     print(data_loader.get_min_max())
-    future = data_loader.get_future_data()
-    print(future.size())
-    print(future)
+    # future = data_loader.get_future_data()
+    # print(future.size())
+    # print(future)
