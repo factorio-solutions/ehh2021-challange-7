@@ -95,11 +95,16 @@ if __name__ == '__main__':
 
     model = LogNormGPpl.load_model(hack_config.model_path)
 
-    show = 500
+    show = 2500
     test_x = dfactory.dset[-show:][0]
     real_x = dfactory.inverse_transform(test_x)
     Y = dfactory.dset[-show:][1]
     x_plt = dfactory.data[-show:].index.values
+
+    pressure = dfactory.data[-show:]['pres']
+    pressure_zeroed = pressure-min(pressure)
+    pressure_norm = pressure_zeroed/max(pressure_zeroed)
+
     model.eval()
     with torch.no_grad():
         output = model(test_x)
@@ -117,21 +122,24 @@ if __name__ == '__main__':
     # visualize the result
     fig, (ax_func, ax_samp) = plt.subplots(1, 2, figsize=(12, 3))
     line = ax_func.plot(
-        x_plt, fn_mean.detach().cpu(), label='GP prediction')
+        x_plt, fn_mean.detach().cpu(), label='Arrivals rate')
     ax_func.fill_between(
         x_plt, lower.detach().cpu().numpy(),
-        upper.detach().cpu().numpy(), color=line[0].get_color(), alpha=0.5
+        upper.detach().cpu().numpy(), color=line[0].get_color(), alpha=0.1
     )
+    ax_func.plot(x_plt, pressure_norm, label='Pressure MinMax transformed')
     ax_func.legend()
 
     ax_samp.scatter(x_plt, Y, alpha=0.5,
-                    label='True train data', color='orange')
+                    label='Arrivals in hour - actual', color='orange')
     y_sim_plt = ax_samp.plot(x_plt, y_sim_mean.cpu(
-    ).detach(), alpha=0.5, label='Sample mean from the model')
+    ).detach(), alpha=0.5, label='Arrivals in hour - most likely')
     ax_samp.fill_between(
         x_plt, y_sim_lower.detach().cpu(),
-        y_sim_upper.detach().cpu(), color=y_sim_plt[0].get_color(), alpha=0.5
+        y_sim_upper.detach().cpu(), color=y_sim_plt[0].get_color(), alpha=0.1
     )
+    
+    ax_samp.plot(x_plt, pressure_norm, label='Pressure MinMax transformed')
     ax_samp.legend()
     fig.tight_layout()
     plt.show()

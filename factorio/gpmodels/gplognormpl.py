@@ -64,8 +64,10 @@ class LogNormGPpl(LightningModule):
         # Output from model
         self.log('train_loss', loss, on_step=False,
                  on_epoch=True, prog_bar=True, logger=True)
-        # self.log('noise_scale', self.gp.likelihood.raw_noise.exp(), on_step=False,
-        #          on_epoch=True, prog_bar=True, logger=True)
+        self.log('zero_inflate_gate_logit',
+                 self.gp.likelihood.zero_inflate_gate,
+                 on_step=False,
+                 on_epoch=True, prog_bar=True, logger=True)
         return {'loss': loss, 'log': {'train_loss': loss}}
 
     def eval_performance(self, val_dset: Iterable[Tuple[Dataset, Dataset]]):

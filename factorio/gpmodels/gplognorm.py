@@ -1,6 +1,7 @@
 import math
 from typing import List, Tuple
 from pyro.distributions import constraints
+from pyro.distributions.zero_inflated import ZeroInflatedPoisson
 import pyro.distributions as dist
 import torch
 from torch.distributions.poisson import Poisson
@@ -96,15 +97,36 @@ class LogNormLikelihood(gpytorch.likelihoods.Likelihood):
 
         # # These are parameters/buffers for the cluster assignment latent variables
         # self.register_buffer("prior_cluster_logits", torch.zeros(num_tasks, num_clusters))
-        # self.register_parameter("variational_cluster_logits", torch.nn.Parameter(torch.randn(num_tasks, num_clusters)))
+        self.register_parameter(
+            "zero_inflate_gate",
+            torch.nn.Parameter(torch.randn(torch.Size([])))
+        )
 
         # # The Gaussian observational noise
         # self.register_parameter("raw_noise", torch.nn.Parameter(torch.tensor(-2.5)))
 
+    # def pyro_guide(self, function_dist, target):
+    #     # Here we add the extra variational distribution for the cluster latent variable
+    #     pyro.sample(
+    #         self.name_prefix + ".cluster_logits",  # self.name_prefix is added by PyroGP
+    #         pyro.distributions.OneHotCategorical(logits=self.variational_cluster_logits).to_event(1)
+    #     )
+    #     return super().pyro_guide(function_dist, target)
+
+    # def pyro_model(self, function_dist, target):
+    #     # Here we add the extra prior distribution for the cluster latent variable
+    #     cluster_assignment_samples = pyro.sample(
+    #         self.name_prefix + ".cluster_logits",  # self.name_prefix is added by PyroGP
+    #         pyro.distributions.OneHotCategorical(logits=self.prior_cluster_logits).to_event(1)
+    #     )
+    #     return super().pyro_model(function_dist, target, cluster_assignment_samples=cluster_assignment_samples)
+
+
     def forward(self, function_samples):
         locs = function_samples.exp()
         # Now we return the observational distribution
-        res = pyro.distributions.torch.Poisson(rate=locs)
+        # res = pyro.distributions.torch.Poisson(rate=locs)
+        res = ZeroInflatedPoisson(rate=locs, gate_logits=self.zero_inflate_gate.expand(locs.size()))
         # res = pyro.distributions.Exponential(locs.reciprocal())
         
         return res

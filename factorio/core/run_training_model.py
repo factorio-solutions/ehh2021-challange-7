@@ -30,6 +30,7 @@ if __name__ == '__main__':
     learn_inducing_locations = True
     slow_mode = False  # enables checkpointing and logging
     learning_rate = 0.01
+    hold_out_last_n = 500  # last hold_out_last_n samples are held out for validation
 
     time_now = datetime.datetime.utcnow()
     parser = argparse.ArgumentParser()
@@ -56,7 +57,7 @@ if __name__ == '__main__':
     dlen = len(dfactory.dset)
     loader = DataLoader(
         # dfactory.dset,
-        Subset(dfactory.dset, torch.arange(dlen - 2000, dlen - 100) - 1),
+        Subset(dfactory.dset, torch.arange(0, dlen - hold_out_last_n) - 1),
         batch_size=loader_batch_size,
         shuffle=True
     )
