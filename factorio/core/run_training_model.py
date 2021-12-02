@@ -55,9 +55,10 @@ if __name__ == '__main__':
     X_mins, X_maxs = dfactory.get_min_max()
 
     dlen = len(dfactory.dset)
+    training_start_sample = dlen-4000  # use 0 to train on all history
     loader = DataLoader(
         # dfactory.dset,
-        Subset(dfactory.dset, torch.arange(0, dlen - hold_out_last_n) - 1),
+        Subset(dfactory.dset, torch.arange(training_start_sample, dlen - hold_out_last_n) - 1),
         batch_size=loader_batch_size,
         shuffle=True
     )

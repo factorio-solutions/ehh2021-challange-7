@@ -177,8 +177,8 @@ if __name__ == '__main__':
     ora = Oracle(hack_config.model_path, dsfactory=dfactory_online)
     anchor_time = datetime.datetime.fromisoformat('2021-11-19-16:00')
     preds = ora.get_arrival_prob_mass(n_arrivals=8,
-                                      to_future=2,
-                                      to_past=10,
+                                      to_future=20,
+                                      to_past=160,
                                       now=anchor_time)
     ax = sns.heatmap(preds.T,
                      vmin=0,
@@ -191,7 +191,7 @@ if __name__ == '__main__':
     ax.invert_yaxis()
     ax.set_xlabel('Time')
     ax.set_ylabel('Number of Arrivals')
-
+    ax.set_title(f'Probability of hourly arrivals {str(anchor_time.date())}')
     plt.show()
 
     print(f'Done')
