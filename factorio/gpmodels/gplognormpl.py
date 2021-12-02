@@ -1,6 +1,7 @@
 import math
 from typing import List, Tuple, Iterable
 import gpytorch
+from gpytorch.distributions.multivariate_normal import MultivariateNormal
 import pyro
 import torch
 from torch.distributions.poisson import Poisson
@@ -41,7 +42,7 @@ class LogNormGPpl(LightningModule):
         self.num_particles = num_particles
         self.save_hyperparameters()
     
-    def forward(self, x):
+    def forward(self, x) -> MultivariateNormal:
         output = self.gp(x)
         return output
 

@@ -1,9 +1,14 @@
 import datetime
 from pathlib import Path
+from typing import Tuple
+from gpytorch.distributions.multivariate_normal import MultivariateNormal
 
 import pandas as pd
+from pandas.core.indexes.datetimes import DatetimeIndex
 import torch
 import pickle
+
+from torch import distributions
 
 from factorio.gpmodels.gplognormpl import LogNormGPpl
 from factorio.utils import data_loader
@@ -32,14 +37,16 @@ class Oracle:
                               n_arrivals=5,
                               to_future: int = 2,
                               to_past: int = 21,
-                              now:datetime.datetime = None):
+                              now: datetime.datetime = None):
         if now is None:
-            now = datetime.datetime.now().replace(second=0, microsecond=0, minute=0)
-        current_data = self.dsfactory.get_prediction_data(now, to_future=to_future, to_past=to_past)
+            now = datetime.datetime.now()
+        now = now.replace(second=0, microsecond=0, minute=0)
+        current_data = self.dsfactory.get_prediction_data(
+            now, to_future=to_future, to_past=to_past)
         datalen = current_data.size(0)
         index = pd.date_range(start=now - datetime.timedelta(hours=to_past),
-                            end=now + datetime.timedelta(hours=to_future),
-                            freq=f"{60}min")
+                              end=now + datetime.timedelta(hours=to_future),
+                              freq=f"{60}min")
 
         with torch.no_grad():
             posterior = self.model.predict(current_data)
@@ -51,6 +58,44 @@ class Oracle:
                             columns=[str(arrivals.item()) for arrivals in torch.arange(n_arrivals)],
                             index=[pd.to_datetime(date) for date in index]
                             )
+
+    def get_arrival_rates(self,
+                          to_future: int = 2,
+                          to_past: int = 21,
+                          now: datetime.datetime = None) -> pd.DataFrame:
+        latent, index = self.get_rates_distribution(to_future=to_future,
+                                                    to_past=to_past,
+                                                    now=now)
+        mu = latent.mean.exp()
+        stddev = latent.stddev.exp()
+        result = torch.stack([mu, stddev]).detach().T.numpy()
+
+        return pd.DataFrame(result,
+                            columns=['mean', 'stddev'],
+                            index=[pd.to_datetime(date) for date in index]
+                            )
+
+    def get_rates_distribution(self,
+                               to_future: int = 2,
+                               to_past: int = 21,
+                               now: datetime.datetime = None) -> Tuple[MultivariateNormal, DatetimeIndex]:
+        if now is None:
+            now = datetime.datetime.now()
+        now = now.replace(second=0, microsecond=0, minute=0)
+        current_data = self.dsfactory.get_prediction_data(
+            now,
+            to_future=to_future,
+            to_past=to_past
+        )
+        index = pd.date_range(start=now - datetime.timedelta(hours=to_past),
+                              end=now + datetime.timedelta(hours=to_future),
+                              freq=f"{60}min")
+
+        with torch.no_grad():
+            latent_normal = self.model(current_data)
+        rate_dist = distributions.LogNormal(loc=latent_normal.mean,
+                                            scale=latent_normal.stddev)
+        return rate_dist, index
 
 
 def get_current_prediction(model, dsfactory, to_future: int = 2):
@@ -193,5 +238,30 @@ if __name__ == '__main__':
     ax.set_ylabel('Number of Arrivals')
     ax.set_title(f'Probability of hourly arrivals {str(anchor_time.date())}')
     plt.show()
+
+    rates = ora.get_arrival_rates(to_future=10,
+                                  to_past=10,
+                                  now=anchor_time)
+    rates.plot()
+    plt.show()
+
+    rates_dist, index = ora.get_rates_distribution(to_future=10,
+                          to_past=10,
+                          now=anchor_time)
+    lower = rates_dist.icdf(torch.tensor(0.1))
+    mu = rates_dist.icdf(torch.tensor(0.5))
+    upper = rates_dist.icdf(torch.tensor(0.9))
+    fig, ax = plt.subplots(1, 1, figsize=(12, 3))
+    lineplot = ax.plot(x_plt, mu)
+    ax.fill_between(
+            x_plt,
+            lower,
+            upper,
+            color=lineplot[0].get_color(), alpha=0.1
+        )
+    ax.grid()
+    ax.set_xlabel('Time')
+    ax.set_ylabel('Arrival Rate')
+    fig.tight_layout()
 
     print(f'Done')
