@@ -239,7 +239,6 @@ class OnlineFactory:
                                          c_date + datetime.timedelta(hours=to_future))
         df = data[['temp', 'rhum', 'pres']]
         
-        # df = df.append(df.iloc[-1])
         df = df.diff()
         df.insert(0, 'hour', df.index.hour)
         df.insert(1, 'day in week', df.index.weekday)
