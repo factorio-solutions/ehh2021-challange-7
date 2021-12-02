@@ -45,8 +45,8 @@ class LogNormGPpl(LightningModule):
         output = self.gp(x)
         return output
 
-    # def predict(self, X):
-    #     return self.gp.predict(X)
+    def predict(self, X):
+        return self.gp.predict(X)
 
     def configure_optimizers(self):
         optimizer = pyro.optim.Adam({"lr": self.lr})

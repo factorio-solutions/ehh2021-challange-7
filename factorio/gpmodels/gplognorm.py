@@ -65,6 +65,11 @@ class LogNormGP(gpytorch.models.pyro.PyroGP):
         covar = self.covar_module(x)
         return gpytorch.distributions.MultivariateNormal(mean, covar)
 
+    def predict(self, X):
+        mu = self(X).mean
+        posterior_dist = self.likelihood(mu)
+        return posterior_dist
+
     def fit(self, tr_x, tr_y, num_iter=100, num_particles=256):
         optimizer = pyro.optim.Adam({"lr": 0.01})
         elbo = pyro.infer.Trace_ELBO(num_particles=num_particles, vectorize_particles=True, retain_graph=True)

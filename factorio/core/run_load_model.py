@@ -22,6 +22,34 @@ class Oracle:
             self.dsfactory.scaler = pickle.load(fid)
         self.model.eval()
 
+    def get_current_prediction(self, to_future: int = 2):
+        return get_current_prediction(self.model, self.dsfactory, to_future)
+
+    def get_past_prediction(self, past_date, to_future: int = 2, to_past: int = 168):
+        return get_past_prediction(self.model, self.dsfactory, past_date, to_future, to_past)
+
+    def get_arrival_prob_mass(self,
+                              n_arrivals=5,
+                              to_future: int = 2,
+                              to_past: int = 21):
+        c_date = datetime.datetime.now().replace(second=0, microsecond=0, minute=0)
+        current_data = self.dsfactory.get_prediction_data(c_date, to_future=to_future, to_past=to_past)
+        datalen = current_data.size(0)
+        index = pd.date_range(start=c_date - datetime.timedelta(hours=to_past),
+                            end=c_date + datetime.timedelta(hours=to_future),
+                            freq=f"{60}min")
+
+        with torch.no_grad():
+            posterior = self.model.predict(current_data)
+        
+        query = torch.arange(n_arrivals).expand(datalen, n_arrivals).permute(1, 0)
+        probs = posterior.log_prob(query).detach().exp().T.numpy()
+
+        return pd.DataFrame(probs,
+                            columns=[str(arrivals.item()) for arrivals in torch.arange(n_arrivals)],
+                            index=[pd.to_datetime(date) for date in index]
+                            )
+
 
 def get_current_prediction(model, dsfactory, to_future: int = 2):
     c_date = datetime.datetime.now()
@@ -81,11 +109,6 @@ if __name__ == '__main__':
 
     hack_config = data_loader.HackConfig.from_config(args.config)
     load_path = hack_config.model_path
-    # dfactory_online = data_loader.OnlineFactory(data_frequency=hack_config.data_frequency,
-    #                                      teams=hack_config.teams,
-    #                                      hospital=hack_config.hospital,
-    #                                      data_folder=hack_config.data_folder,
-    #                                      dtype=dtype)
 
     dfactory = data_loader.DataFactory(data_frequency=hack_config.data_frequency,
                                          teams=hack_config.teams,
@@ -142,6 +165,19 @@ if __name__ == '__main__':
     ax_samp.plot(x_plt, pressure_norm, label='Pressure MinMax transformed')
     ax_samp.legend()
     fig.tight_layout()
+    plt.show()
+
+
+    dfactory_online = data_loader.OnlineFactory(data_frequency=hack_config.data_frequency,
+                                         teams=hack_config.teams,
+                                         hospital=hack_config.hospital,
+                                         data_folder=hack_config.data_folder,
+                                         dtype=dtype)
+    ora = Oracle(hack_config.model_path, dsfactory=dfactory_online)
+    preds = ora.get_arrival_prob_mass(n_arrivals=8,
+                                      to_future=2,
+                                      to_past=10)
+    ax = sns.heatmap(preds, vmin=0, vmax=1)
     plt.show()
 
     print(f'Done')

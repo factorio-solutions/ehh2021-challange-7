@@ -1,4 +1,5 @@
 import datetime
+import functools
 import glob
 from pathlib import Path
 import warnings
@@ -157,7 +158,7 @@ class DataFactory:
         df = data[['temp', 'rhum', 'pres']]
         df.insert(0, 'hour', df.index.hour)
         df.insert(1, 'day in week', df.index.weekday)
-        df.insert(2, 'month', df.index.month)
+        df.insert(2, 'dayofyear', df.index.dayofyear)
         df.reset_index(drop=True, inplace=True)
         football_data.reset_index(drop=True, inplace=True)
         google.reset_index(drop=True, inplace=True)
@@ -215,10 +216,11 @@ class OnlineFactory:
         data_incidence['datum'] = pd.to_datetime(data_incidence['datum'])
         data_incidence.set_index('datum', drop=True, inplace=True)
         return data_incidence.resample(f'{self.data_frequency}min').ffill()[start_date:end_date]
-
+    
+    @functools.lru_cache(maxsize=5, typed=False)
     def get_prediction_data(self, c_date, to_future: int = 2, to_past: int = 24, dtype=torch.float):
         h_weather = HistoricalWeather()
-        to_past -= to_future
+        # to_past -= to_future
         index = pd.date_range(start=c_date - datetime.timedelta(hours=to_past),
                               end=c_date + datetime.timedelta(hours=to_future),
                               freq=f"{self.data_frequency}min")
@@ -226,6 +228,7 @@ class OnlineFactory:
         football_data = pd.DataFrame.from_dict(self.football.get_visitors(index[0] - datetime.timedelta(days=365),
                                                                           index[-1] + datetime.timedelta(days=1)),
                                                orient='index').loc[index[0] + datetime.timedelta(hours=1):index[-1]]
+        # We assume the state 7 days ago affect today arrivals
         google, apple, waze = self.__load_mobility(index[0] - datetime.timedelta(days=7),
                                                    index[-1] - datetime.timedelta(days=7))
         incidence = self.__load_incidence(index[0] - datetime.timedelta(days=7),
@@ -235,7 +238,7 @@ class OnlineFactory:
         df = data[['temp', 'rhum', 'pres']]
         df.insert(0, 'hour', df.index.hour)
         df.insert(1, 'day in week', df.index.weekday)
-        df.insert(2, 'month', df.index.month)
+        df.insert(2, 'dayofyear', df.index.dayofyear)
         df.reset_index(drop=True, inplace=True)
         football_data.reset_index(drop=True, inplace=True)
         google.reset_index(drop=True, inplace=True)
