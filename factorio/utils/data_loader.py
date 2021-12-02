@@ -1,4 +1,5 @@
 import datetime
+import functools
 import glob
 from pathlib import Path
 import warnings
@@ -13,7 +14,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
-import streamlit as st
 from sklearn.preprocessing import MinMaxScaler
 from torch.utils.data import TensorDataset
 
@@ -37,12 +37,10 @@ class DataFactory:
         self.football = Football(self.teams)
         self.g_reports = [str(self.data_folder / '2020_CZ_Region_Mobility_Report.csv'),
                           str(self.data_folder / '2021_CZ_Region_Mobility_Report.csv')]
-        self.a_datafile = str(self.data_folder / 'applemobilitytrends-2021-11-18.csv')
-        self.w_datafile = str(self.data_folder / "Waze _ COVID-19 Impact Dashboard_City-Level Data_Table.csv")
 
         self.google_m = MobilityGoogle(reports=self.g_reports)
-        self.apple_m = MobilityApple(datafile=self.a_datafile)
-        self.waze_m = MobilityWaze(datafile=self.w_datafile)
+        self.apple_m = MobilityApple()
+        self.waze_m = MobilityWaze()
 
         self.dset = self.create_timestamp(dtype=dtype)
 
@@ -67,9 +65,11 @@ class DataFactory:
         data.fillna(0, inplace=True)
         data = data.resample(f'{self.data_frequency}min').ffill()
         selected_data = data[['temp', 'rhum', 'pres']]
+        # selected_data = selected_data.append(selected_data.iloc[-1])
+        selected_data = selected_data.diff()
         selected_data.insert(0, 'hour', selected_data.index.hour)
         selected_data.insert(1, 'day in week', selected_data.index.weekday)
-        selected_data.insert(2, 'month', selected_data.index.month)
+        selected_data.insert(2, 'dayofyear', selected_data.index.dayofyear)
 
         football = self.load_football(start_date, end_date)
         google, apple, waze = self.__load_mobility(start_date, end_date)
@@ -118,6 +118,7 @@ class DataFactory:
         this_year['datum a čas'] = pd.to_datetime(this_year['datum a čas'])
         this_year.set_index('datum a čas', inplace=True)
         this_year = this_year.drop('Unnamed: 8', axis=1)
+        this_year = this_year[this_year['důvod'] != 'kardioverze']
         li.append(this_year['2021-01-01':])
         return pd.concat(li, axis=0)
 
@@ -139,41 +140,41 @@ class DataFactory:
     def inverse_transform(self, X: torch.Tensor):
         return self.scaler.inverse_transform(X.numpy())
 
-    def get_future_data(self, hour: int = 2, dtype=torch.float):
-        c_date = datetime.datetime.now()
-        h_weather = HistoricalWeather()
-        to_past = 24 - hour
-        index = pd.date_range(start=c_date - datetime.timedelta(hours=to_past),
-                              end=c_date + datetime.timedelta(hours=hour),
-                              freq=f"{self.data_frequency}min")
-        index = [pd.to_datetime(date) for date in index]
-        football_data = pd.DataFrame.from_dict(self.football.get_visitors(index[0] - datetime.timedelta(days=365),
-                                                                          index[-1] + datetime.timedelta(days=1)),
-                                               orient='index').loc[index[0] + datetime.timedelta(hours=1):index[-1]]
-        google, apple, waze = self.__load_mobility(index[0] - datetime.timedelta(days=7),
-                                                   index[-1] - datetime.timedelta(days=7))
-        incidence = self.__load_incidence(index[0] - datetime.timedelta(days=7),
-                                          index[-1] - datetime.timedelta(days=7))
-        data = h_weather.get_temperature(c_date - datetime.timedelta(hours=to_past),
-                                         c_date + datetime.timedelta(hours=hour))
-        df = data[['temp', 'rhum', 'pres']]
-        df.insert(0, 'hour', df.index.hour)
-        df.insert(1, 'day in week', df.index.weekday)
-        df.insert(2, 'month', df.index.month)
-        df.reset_index(drop=True, inplace=True)
-        football_data.reset_index(drop=True, inplace=True)
-        google.reset_index(drop=True, inplace=True)
-        apple.reset_index(drop=True, inplace=True)
-        waze.reset_index(drop=True, inplace=True)
-        incidence.reset_index(drop=True, inplace=True)
-        df = df.join(football_data)
-        df = df.join(google[['retail_and_recreation_percent_change_from_baseline',
-                             'residential_percent_change_from_baseline']])
+    # def get_future_data(self, hour: int = 2, dtype=torch.float):
+    #     c_date = datetime.datetime.now()
+    #     h_weather = HistoricalWeather()
+    #     to_past = 24 - hour
+    #     index = pd.date_range(start=c_date - datetime.timedelta(hours=to_past),
+    #                           end=c_date + datetime.timedelta(hours=hour),
+    #                           freq=f"{self.data_frequency}min")
+    #     index = [pd.to_datetime(date) for date in index]
+    #     football_data = pd.DataFrame.from_dict(self.football.get_visitors(index[0] - datetime.timedelta(days=365),
+    #                                                                       index[-1] + datetime.timedelta(days=1)),
+    #                                            orient='index').loc[index[0] + datetime.timedelta(hours=1):index[-1]]
+    #     google, apple, waze = self.__load_mobility(index[0] - datetime.timedelta(days=7),
+    #                                                index[-1] - datetime.timedelta(days=7))
+    #     incidence = self.__load_incidence(index[0] - datetime.timedelta(days=7),
+    #                                       index[-1] - datetime.timedelta(days=7))
+    #     data = h_weather.get_temperature(c_date - datetime.timedelta(hours=to_past),
+    #                                      c_date + datetime.timedelta(hours=hour))
+    #     df = data[['temp', 'rhum', 'pres']]
+    #     df.insert(0, 'hour', df.index.hour)
+    #     df.insert(1, 'day in week', df.index.weekday)
+    #     df.insert(2, 'dayofyear', df.index.dayofyear)
+    #     df.reset_index(drop=True, inplace=True)
+    #     football_data.reset_index(drop=True, inplace=True)
+    #     google.reset_index(drop=True, inplace=True)
+    #     apple.reset_index(drop=True, inplace=True)
+    #     waze.reset_index(drop=True, inplace=True)
+    #     incidence.reset_index(drop=True, inplace=True)
+    #     df = df.join(football_data)
+    #     df = df.join(google[['retail_and_recreation_percent_change_from_baseline',
+    #                          'residential_percent_change_from_baseline']])
 
-        df = df.join(waze['waze'])
-        df = df.join(apple['apple'])
-        df = df.join(incidence['incidence_7_100000'])
-        return torch.as_tensor(self.scaler.transform(df.values)).to(dtype)
+    #     df = df.join(waze['waze'])
+    #     df = df.join(apple['apple'])
+    #     df = df.join(incidence['incidence_7_100000'])
+    #     return torch.as_tensor(self.scaler.transform(df.values)).to(dtype)
 
 
 class OnlineFactory:
@@ -189,12 +190,10 @@ class OnlineFactory:
         self.football = Football(self.teams)
         self.g_reports = [str(self.data_folder / '2020_CZ_Region_Mobility_Report.csv'),
                           str(self.data_folder / '2021_CZ_Region_Mobility_Report.csv')]
-        self.a_datafile = str(self.data_folder / 'applemobilitytrends-2021-11-18.csv')
-        self.w_datafile = str(self.data_folder / "Waze _ COVID-19 Impact Dashboard_City-Level Data_Table.csv")
 
         self.google_m = MobilityGoogle(reports=self.g_reports)
-        self.apple_m = MobilityApple(datafile=self.a_datafile)
-        self.waze_m = MobilityWaze(datafile=self.w_datafile)
+        self.apple_m = MobilityApple()
+        self.waze_m = MobilityWaze()
 
     def __load_mobility(self, start_date, end_date):
         google = pd.DataFrame.from_dict(self.google_m.get_mobility(), orient='index')
@@ -219,27 +218,31 @@ class OnlineFactory:
         data_incidence['datum'] = pd.to_datetime(data_incidence['datum'])
         data_incidence.set_index('datum', drop=True, inplace=True)
         return data_incidence.resample(f'{self.data_frequency}min').ffill()[start_date:end_date]
-
-    def get_future_data(self, c_date, hour: int = 2, dtype=torch.float):
+    
+    @functools.lru_cache(maxsize=5, typed=False)
+    def get_prediction_data(self, c_date, to_future: int = 2, to_past: int = 24, dtype=torch.float):
         h_weather = HistoricalWeather()
-        to_past = 24 - hour
+        # to_past -= to_future
         index = pd.date_range(start=c_date - datetime.timedelta(hours=to_past),
-                              end=c_date + datetime.timedelta(hours=hour),
+                              end=c_date + datetime.timedelta(hours=to_future),
                               freq=f"{self.data_frequency}min")
         index = [pd.to_datetime(date) for date in index]
         football_data = pd.DataFrame.from_dict(self.football.get_visitors(index[0] - datetime.timedelta(days=365),
                                                                           index[-1] + datetime.timedelta(days=1)),
                                                orient='index').loc[index[0] + datetime.timedelta(hours=1):index[-1]]
+        # We assume the state 7 days ago affect today arrivals
         google, apple, waze = self.__load_mobility(index[0] - datetime.timedelta(days=7),
                                                    index[-1] - datetime.timedelta(days=7))
         incidence = self.__load_incidence(index[0] - datetime.timedelta(days=7),
                                           index[-1] - datetime.timedelta(days=7))
         data = h_weather.get_temperature(c_date - datetime.timedelta(hours=to_past),
-                                         c_date + datetime.timedelta(hours=hour))
+                                         c_date + datetime.timedelta(hours=to_future))
         df = data[['temp', 'rhum', 'pres']]
+        
+        df = df.diff()
         df.insert(0, 'hour', df.index.hour)
         df.insert(1, 'day in week', df.index.weekday)
-        df.insert(2, 'month', df.index.month)
+        df.insert(2, 'dayofyear', df.index.dayofyear)
         df.reset_index(drop=True, inplace=True)
         football_data.reset_index(drop=True, inplace=True)
         google.reset_index(drop=True, inplace=True)
@@ -253,41 +256,6 @@ class OnlineFactory:
         df = df.join(waze['waze'])
         df = df.join(apple['apple'])
         df = df.join(incidence['incidence_7_100000'])
-        return torch.as_tensor(np.nan_to_num(self.scaler.transform(df.values))).to(dtype)
-
-    def get_past_data(self, c_date, hour: int = 2, to_past: int = 168, dtype=torch.float):
-        h_weather = HistoricalWeather()
-        index = pd.date_range(start=c_date - datetime.timedelta(hours=to_past),
-                              end=c_date + datetime.timedelta(hours=hour),
-                              freq=f"{self.data_frequency}min")
-        index = [pd.to_datetime(date) for date in index]
-        football_data = pd.DataFrame.from_dict(self.football.get_visitors(index[0] - datetime.timedelta(days=365),
-                                                                          index[-1] + datetime.timedelta(days=1)),
-                                               orient='index').loc[index[0] + datetime.timedelta(hours=1):index[-1]]
-        google, apple, waze = self.__load_mobility(index[0] - datetime.timedelta(days=7),
-                                                   index[-1] - datetime.timedelta(days=7))
-        incidence = self.__load_incidence(index[0] - datetime.timedelta(days=7),
-                                          index[-1] - datetime.timedelta(days=7))
-        data = h_weather.get_temperature(c_date - datetime.timedelta(hours=to_past),
-                                         c_date + datetime.timedelta(hours=hour))
-        df = data[['temp', 'rhum', 'pres']]
-        df.insert(0, 'hour', df.index.hour)
-        df.insert(1, 'day in week', df.index.weekday)
-        df.insert(2, 'month', df.index.month)
-        df.reset_index(drop=True, inplace=True)
-        football_data.reset_index(drop=True, inplace=True)
-        google.reset_index(drop=True, inplace=True)
-        apple.reset_index(drop=True, inplace=True)
-        waze.reset_index(drop=True, inplace=True)
-        incidence.reset_index(drop=True, inplace=True)
-        df = df.join(football_data)
-        df = df.join(google[['retail_and_recreation_percent_change_from_baseline',
-                             'residential_percent_change_from_baseline']])
-
-        df = df.join(waze['waze'])
-        df = df.join(apple['apple'])
-        df = df.join(incidence['incidence_7_100000'])
-        df.fillna(0)
         return torch.as_tensor(np.nan_to_num(self.scaler.transform(df.values))).to(dtype)
 
     def create_timestamp(self, dtype=torch.float):
@@ -334,13 +302,11 @@ if __name__ == '__main__':
                                                   f"to config.ini file, please check it!")
 
     hack_config = HackConfig.from_config(args.config)
-    data_ = load_data(hack_config.z_case)
-    data_loader = DataFactory(data_,
-                              hack_config.data_frequency,
+    data_loader = DataFactory(hack_config.data_frequency,
                               teams=hack_config.teams,
                               hospital=hack_config.hospital,
                               data_folder=hack_config.data_folder)
     print(data_loader.get_min_max())
-    future = data_loader.get_future_data()
-    print(future.size())
-    print(future)
+    # future = data_loader.get_future_data()
+    # print(future.size())
+    # print(future)

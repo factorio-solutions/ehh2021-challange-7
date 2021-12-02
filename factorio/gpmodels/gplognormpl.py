@@ -1,6 +1,7 @@
 import math
 from typing import List, Tuple, Iterable
 import gpytorch
+from gpytorch.distributions.multivariate_normal import MultivariateNormal
 import pyro
 import torch
 from torch.distributions.poisson import Poisson
@@ -41,12 +42,12 @@ class LogNormGPpl(LightningModule):
         self.num_particles = num_particles
         self.save_hyperparameters()
     
-    def forward(self, x):
+    def forward(self, x) -> MultivariateNormal:
         output = self.gp(x)
         return output
 
-    # def predict(self, X):
-    #     return self.gp.predict(X)
+    def predict(self, X):
+        return self.gp.predict(X)
 
     def configure_optimizers(self):
         optimizer = pyro.optim.Adam({"lr": self.lr})
@@ -64,8 +65,10 @@ class LogNormGPpl(LightningModule):
         # Output from model
         self.log('train_loss', loss, on_step=False,
                  on_epoch=True, prog_bar=True, logger=True)
-        # self.log('noise_scale', self.gp.likelihood.raw_noise.exp(), on_step=False,
-        #          on_epoch=True, prog_bar=True, logger=True)
+        self.log('zero_inflate_gate_logit',
+                 self.gp.likelihood.zero_inflate_gate,
+                 on_step=False,
+                 on_epoch=True, prog_bar=True, logger=True)
         return {'loss': loss, 'log': {'train_loss': loss}}
 
     def eval_performance(self, val_dset: Iterable[Tuple[Dataset, Dataset]]):

@@ -1,12 +1,20 @@
+import io
+import zipfile
+
 import pandas as pd
 from datetime import datetime, timedelta
+
+import requests as requests
 
 
 class MobilityGoogle:
     def __init__(self,
                  reports=['2020_CZ_Region_Mobility_Report.csv',
-                          '2021_CZ_Region_Mobility_Report.csv']):
-
+                          '2021_CZ_Region_Mobility_Report.csv'],
+                 zip_file_url='',
+                 extract_folder=''):
+        self.zip_file_url = zip_file_url
+        self.extract_folder = extract_folder
         df = None
         for count, report in enumerate(reports):
             if count == 0:
@@ -51,11 +59,17 @@ class MobilityGoogle:
 
         return hourly_mobility
 
+    def download_file(self, save_dir='mnt/'):
+        r = requests.get(self.zip_file_url)
+        z = zipfile.ZipFile(io.BytesIO(r.content))
+        cz_data = [f for f in z.filelist if 'CZ_Region_Mobility_Report' in f.filename]
+        [z.extract(csv, save_dir) for csv in cz_data]
+
 
 if __name__ == '__main__':
     mobility_google = MobilityGoogle()
     df = mobility_google.get_df()
-    mobility = mobility_google.get_mobility()
+    mobility_ = mobility_google.get_mobility()
 
-    for date, data in mobility.items():
+    for date, data in mobility_.items():
         print(str(date) + " | " + str(data))

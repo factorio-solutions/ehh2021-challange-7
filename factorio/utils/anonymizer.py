@@ -10,7 +10,7 @@ def __load_ikem_data(data_folder):
     for filename in all_files:
         df: pd.DataFrame = pd.read_excel(filename)
         df['rodné číslo'] = pd.util.hash_pandas_object(df['rodné číslo'])
-        df.to_csv(filename, index=False)
+        df.to_excel(filename, index=False)
 
 
 if __name__ == '__main__':
