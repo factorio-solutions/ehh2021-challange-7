@@ -31,12 +31,14 @@ class Oracle:
     def get_arrival_prob_mass(self,
                               n_arrivals=5,
                               to_future: int = 2,
-                              to_past: int = 21):
-        c_date = datetime.datetime.now().replace(second=0, microsecond=0, minute=0)
-        current_data = self.dsfactory.get_prediction_data(c_date, to_future=to_future, to_past=to_past)
+                              to_past: int = 21,
+                              now:datetime.datetime = None):
+        if now is None:
+            now = datetime.datetime.now().replace(second=0, microsecond=0, minute=0)
+        current_data = self.dsfactory.get_prediction_data(now, to_future=to_future, to_past=to_past)
         datalen = current_data.size(0)
-        index = pd.date_range(start=c_date - datetime.timedelta(hours=to_past),
-                            end=c_date + datetime.timedelta(hours=to_future),
+        index = pd.date_range(start=now - datetime.timedelta(hours=to_past),
+                            end=now + datetime.timedelta(hours=to_future),
                             freq=f"{60}min")
 
         with torch.no_grad():
@@ -167,17 +169,29 @@ if __name__ == '__main__':
     fig.tight_layout()
     plt.show()
 
-
     dfactory_online = data_loader.OnlineFactory(data_frequency=hack_config.data_frequency,
-                                         teams=hack_config.teams,
-                                         hospital=hack_config.hospital,
-                                         data_folder=hack_config.data_folder,
-                                         dtype=dtype)
+                                                teams=hack_config.teams,
+                                                hospital=hack_config.hospital,
+                                                data_folder=hack_config.data_folder,
+                                                dtype=dtype)
     ora = Oracle(hack_config.model_path, dsfactory=dfactory_online)
+    anchor_time = datetime.datetime.fromisoformat('2021-11-19-16:00')
     preds = ora.get_arrival_prob_mass(n_arrivals=8,
                                       to_future=2,
-                                      to_past=10)
-    ax = sns.heatmap(preds, vmin=0, vmax=1)
+                                      to_past=10,
+                                      now=anchor_time)
+    ax = sns.heatmap(preds.T,
+                     vmin=0,
+                     vmax=1,
+                     annot=True,
+                     fmt='.1f',
+                     cmap=sns.color_palette("light:darkred", as_cmap=True),
+                     cbar_kws={'label': 'Probability'})
+    ax.set_xticklabels(preds.index.strftime('%d. %m. %H:%M'))
+    ax.invert_yaxis()
+    ax.set_xlabel('Time')
+    ax.set_ylabel('Number of Arrivals')
+
     plt.show()
 
     print(f'Done')

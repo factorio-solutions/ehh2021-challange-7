@@ -67,7 +67,7 @@ class DataFactory:
         selected_data = data[['temp', 'rhum', 'pres']]
         selected_data.insert(0, 'hour', selected_data.index.hour)
         selected_data.insert(1, 'day in week', selected_data.index.weekday)
-        selected_data.insert(2, 'month', selected_data.index.month)
+        selected_data.insert(2, 'dayofyear', selected_data.index.dayofyear)
 
         football = self.load_football(start_date, end_date)
         google, apple, waze = self.__load_mobility(start_date, end_date)
