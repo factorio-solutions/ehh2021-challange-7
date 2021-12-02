@@ -177,14 +177,14 @@ if __name__ == '__main__':
     ora = Oracle(hack_config.model_path, dsfactory=dfactory_online)
     anchor_time = datetime.datetime.fromisoformat('2021-11-19-16:00')
     preds = ora.get_arrival_prob_mass(n_arrivals=8,
-                                      to_future=20,
-                                      to_past=160,
+                                      to_future=10,
+                                      to_past=10,
                                       now=anchor_time)
     ax = sns.heatmap(preds.T,
                      vmin=0,
                      vmax=1,
                      annot=True,
-                     fmt='.1f',
+                     fmt='.2f',
                      cmap=sns.color_palette("light:darkred", as_cmap=True),
                      cbar_kws={'label': 'Probability'})
     ax.set_xticklabels(preds.index.strftime('%d. %m. %H:%M'))
