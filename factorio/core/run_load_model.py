@@ -50,13 +50,15 @@ class Oracle:
 
         with torch.no_grad():
             posterior = self.model.predict(current_data)
-        
-        query = torch.arange(n_arrivals).expand(datalen, n_arrivals).permute(1, 0)
+
+        query = torch.arange(n_arrivals).expand(
+            datalen, n_arrivals).permute(1, 0)
         probs = posterior.log_prob(query).detach().exp().T.numpy()
 
         return pd.DataFrame(probs,
-                            columns=[str(arrivals.item()) for arrivals in torch.arange(n_arrivals)],
-                            index=[pd.to_datetime(date) for date in index]
+                            columns=[str(arrivals.item())
+                                     for arrivals in torch.arange(n_arrivals)],
+                            index=index
                             )
 
     def get_arrival_rates(self,
@@ -118,7 +120,8 @@ def get_current_prediction(model, dsfactory, to_future: int = 2):
 
 
 def get_past_prediction(model, dsfactory, past_date, to_future: int = 2, to_past: int = 168):
-    current_data = dsfactory.get_prediction_data(past_date, to_future, to_past=to_past)
+    current_data = dsfactory.get_prediction_data(
+        past_date, to_future, to_past=to_past)
     index = pd.date_range(start=past_date - datetime.timedelta(hours=to_past - 1),
                           end=past_date + datetime.timedelta(hours=to_future),
                           freq=f"{60}min")
@@ -130,7 +133,8 @@ def get_past_prediction(model, dsfactory, past_date, to_future: int = 2, to_past
     percentile, = percentiles_from_samples(rate_samples, [0.8])
     tmp_df = pd.DataFrame(percentile,
                           columns=['Arrivals Hourly Rate'],
-                          index=[pd.to_datetime(date).strftime("%Y-%m-%d %H-%M-%S") for date in index]
+                          index=[pd.to_datetime(date).strftime(
+                              "%Y-%m-%d %H-%M-%S") for date in index]
                           )
     return tmp_df
 
@@ -158,10 +162,10 @@ if __name__ == '__main__':
     load_path = hack_config.model_path
 
     dfactory = data_loader.DataFactory(data_frequency=hack_config.data_frequency,
-                                         teams=hack_config.teams,
-                                         hospital=hack_config.hospital,
-                                         data_folder=hack_config.data_folder,
-                                         dtype=dtype)
+                                       teams=hack_config.teams,
+                                       hospital=hack_config.hospital,
+                                       data_folder=hack_config.data_folder,
+                                       dtype=dtype)
 
     model = LogNormGPpl.load_model(hack_config.model_path)
 
@@ -181,13 +185,17 @@ if __name__ == '__main__':
 
     # Similarly get the 5th and 95th percentiles
     lat_samples = output.rsample(torch.Size([30])).exp()
-    samples_expanded = model.gp.likelihood(lat_samples).sample(torch.Size([30]))
-    samples = samples_expanded.view(samples_expanded.size(0) * samples_expanded.size(1), -1)
+    samples_expanded = model.gp.likelihood(
+        lat_samples).sample(torch.Size([30]))
+    samples = samples_expanded.view(
+        samples_expanded.size(0) * samples_expanded.size(1), -1)
 
     # Similarly get the 5th and 95th percentiles
-    lower, fn_mean, upper = percentiles_from_samples(lat_samples, [.001, 0.5, 0.8])
+    lower, fn_mean, upper = percentiles_from_samples(
+        lat_samples, [.001, 0.5, 0.8])
 
-    y_sim_lower, y_sim_mean, y_sim_upper = percentiles_from_samples(samples, [.001, 0.5, 0.8])
+    y_sim_lower, y_sim_mean, y_sim_upper = percentiles_from_samples(
+        samples, [.001, 0.5, 0.8])
 
     # visualize the result
     fig, (ax_func, ax_samp) = plt.subplots(1, 2, figsize=(12, 3))
@@ -208,7 +216,7 @@ if __name__ == '__main__':
         x_plt, y_sim_lower.detach().cpu(),
         y_sim_upper.detach().cpu(), color=y_sim_plt[0].get_color(), alpha=0.1
     )
-    
+
     ax_samp.plot(x_plt, pressure_norm, label='Pressure MinMax transformed')
     ax_samp.legend()
     fig.tight_layout()
@@ -246,19 +254,19 @@ if __name__ == '__main__':
     plt.show()
 
     rates_dist, index = ora.get_rates_distribution(to_future=10,
-                          to_past=10,
-                          now=anchor_time)
+                                                   to_past=10,
+                                                   now=anchor_time)
     lower = rates_dist.icdf(torch.tensor(0.1))
     mu = rates_dist.icdf(torch.tensor(0.5))
     upper = rates_dist.icdf(torch.tensor(0.9))
     fig, ax = plt.subplots(1, 1, figsize=(12, 3))
-    lineplot = ax.plot(x_plt, mu)
+    lineplot = ax.plot(index, mu)
     ax.fill_between(
-            x_plt,
-            lower,
-            upper,
-            color=lineplot[0].get_color(), alpha=0.1
-        )
+        index,
+        lower,
+        upper,
+        color=lineplot[0].get_color(), alpha=0.1
+    )
     ax.grid()
     ax.set_xlabel('Time')
     ax.set_ylabel('Arrival Rate')
