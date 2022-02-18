@@ -3,5 +3,11 @@ services:
   zcaseplus:
     build: ""
     ports:
-      - "8501:8501"
+      - "10.35.16.77:8501:8501"
     image:  mi10mod.azurecr.io/zcaseplus:2022.1.0
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '5'
+          memory: 500M

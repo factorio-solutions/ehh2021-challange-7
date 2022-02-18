@@ -7,7 +7,10 @@ from streamlit_autorefresh import st_autorefresh
 import plotly.express as px
 import argparse
 import torch
+import sys
+import os
 
+sys.path.extend([os.getcwd()])
 from factorio.core.run_load_model import Oracle, get_current_prediction
 from factorio.utils import data_loader
 
