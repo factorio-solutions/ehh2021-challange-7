@@ -25,8 +25,9 @@ class Oracle:
 
 def get_current_prediction(model, dsfactory, to_future: int = 2):
     c_date = datetime.datetime.now()
-    current_data = dsfactory.get_prediction_data(c_date, to_future)
-    to_past = 23 - to_future
+    current_data = dsfactory.get_prediction_data(c_date, to_future=to_future, to_past=to_future + 1)
+    # to_past = 23 - to_future
+    to_past = to_future
     index = pd.date_range(start=c_date - datetime.timedelta(hours=to_past),
                           end=c_date + datetime.timedelta(hours=to_future),
                           freq=f"{60}min")

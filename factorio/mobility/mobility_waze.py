@@ -10,7 +10,7 @@ class MobilityWaze:
 
     def get_mobility(self,
                      start_date=datetime(2020, 8, 31),
-                     end_date=datetime(2021, 11, 18, 23, 59)):
+                     end_date=datetime.now()):
         mobility = self.__reports_df.loc[self.__reports_df['Country'] == "Czechia"]
         mobility = mobility[mobility['City'] == 'Prague']
         mobility = mobility.iloc[::-1]

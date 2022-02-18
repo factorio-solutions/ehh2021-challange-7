@@ -24,7 +24,7 @@ class MobilityApple:
 
     def get_mobility(self,
                      start_date=datetime(2020, 8, 31),
-                     end_date=datetime(2021, 11, 18, 23, 59)):
+                     end_date=datetime.now()):
         mobility = self.__reports_df.loc[self.__reports_df['region'] == "Prague"]
         dates = mobility.drop(['geo_type',
                                'region',

@@ -1,21 +1,25 @@
+import glob
 import io
+import os
 import zipfile
 
 import pandas as pd
 from datetime import datetime, timedelta
 
 import requests as requests
+from bs4 import BeautifulSoup
 
 
 class MobilityGoogle:
     def __init__(self,
-                 reports=['2020_CZ_Region_Mobility_Report.csv',
-                          '2021_CZ_Region_Mobility_Report.csv'],
-                 zip_file_url='',
+                 zip_file_url=r'https://www.gstatic.com/covid19/mobility/Region_Mobility_Report_CSVs.zip',
                  extract_folder=''):
         self.zip_file_url = zip_file_url
+        self.download_file()
         self.extract_folder = extract_folder
         df = None
+
+        reports = glob.glob('mnt/*_CZ_Region_Mobility_Report.csv')
         for count, report in enumerate(reports):
             if count == 0:
                 df = pd.read_csv(reports[count])
@@ -37,11 +41,11 @@ class MobilityGoogle:
                   'workplaces_percent_change_from_baseline',
                   'residential_percent_change_from_baseline']]
 
-        return df1
+        return df1.sort_index()
 
     def get_mobility(self,
                      start_date=datetime(2020, 8, 31),
-                     end_date=datetime(2021, 11, 18, 23, 59)):
+                     end_date=datetime.now()):
 
         mobility = self.get_df()
 
@@ -64,11 +68,13 @@ class MobilityGoogle:
         z = zipfile.ZipFile(io.BytesIO(r.content))
         cz_data = [f for f in z.filelist if 'CZ_Region_Mobility_Report' in f.filename]
         [z.extract(csv, save_dir) for csv in cz_data]
+        return True
 
 
 if __name__ == '__main__':
     mobility_google = MobilityGoogle()
-    df = mobility_google.get_df()
+    mobility_google.download_file()
+    df_ = mobility_google.get_df()
     mobility_ = mobility_google.get_mobility()
 
     for date, data in mobility_.items():

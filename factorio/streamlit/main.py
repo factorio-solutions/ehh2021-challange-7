@@ -27,7 +27,8 @@ st.set_page_config(
     # }
 )
 
-count = st_autorefresh(interval=900000, limit=1000, key="fizzbuzzcounter")
+count = st_autorefresh(interval=5 * 60 * 1000, limit=1000, key="fizzbuzzcounter")
+
 dtype = torch.float
 parser = argparse.ArgumentParser()
 
@@ -51,7 +52,6 @@ hack_config = data_loader.HackConfig.from_config(args.config)
           allow_output_mutation=True)
 def get_factory():
     return data_loader.OnlineFactory(data_frequency=hack_config.data_frequency,
-                                     teams=hack_config.teams,
                                      hospital=hack_config.hospital,
                                      data_folder=hack_config.data_folder,
                                      dtype=dtype)
@@ -69,8 +69,9 @@ def create_ora():
 ora = create_ora()
 
 c_date = datetime.datetime.now()
-st.subheader('Predict future hour!')
-hour = st.slider('Prediction Window', 0, 23, 2)
+st.subheader('Patient arriver prediction')
+# hour = st.slider('Prediction Window', 0, 23, 2)
+hour = 4
 
 df = get_current_prediction(ora.model, ora.dsfactory, hour)
 df.index.name = 'Datetime'

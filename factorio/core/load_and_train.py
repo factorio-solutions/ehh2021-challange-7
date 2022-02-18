@@ -11,7 +11,6 @@ from factorio.utils import data_loader
 from factorio.utils.helpers import percentiles_from_samples
 import argparse
 
-
 if __name__ == '__main__':
 
     # Move to config at some point
@@ -38,7 +37,10 @@ if __name__ == '__main__':
 
     hack_config = data_loader.HackConfig.from_config(args.config)
     data = data_loader.load_data(hack_config.z_case)
-    dfactory = data_loader.DataFactory(data, hack_config.data_frequency, dtype=dtype)
+    dfactory = data_loader.DataFactory(hack_config.data_frequency,
+                                       hospital=hack_config.hospital,
+                                       data_folder=hack_config.data_folder,
+                                       dtype=dtype)
 
     X_mins, X_maxs = dfactory.get_min_max()
 
@@ -48,7 +50,7 @@ if __name__ == '__main__':
     ], dim=-1)
 
     model = RateGPpl.load_model(load_path)
-    
+
     test_x = dfactory.dset[-1000:][0]
     Y = dfactory.dset[-1000:][1]
     x_plt = torch.arange(Y.size(0)).detach().cpu()
