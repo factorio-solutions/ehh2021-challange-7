@@ -1,7 +1,12 @@
+import abc
 import datetime
 import glob
 from pathlib import Path
 import warnings
+
+from pandas.core.common import SettingWithCopyWarning
+from pandas.errors import DtypeWarning
+
 from factorio.mobility.mobility_apple import MobilityApple
 from factorio.mobility.mobility_google import MobilityGoogle
 from factorio.mobility.mobility_waze import MobilityWaze
@@ -9,6 +14,8 @@ from factorio.utils.hack_config import HackConfig
 from factorio.web_scraping.football import Football
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.simplefilter(action='ignore', category=DtypeWarning)
+warnings.simplefilter(action='ignore', category=SettingWithCopyWarning)
 import numpy as np
 import pandas as pd
 import torch
@@ -22,25 +29,69 @@ from factorio.weather import ActualWeather, HistoricalWeather
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 
-class DataFactory:
-    def __init__(self, data_frequency, hospital, data_folder, dtype=torch.float):
+class AbstractFactory(abc.ABC):
+    def __init__(self, data_frequency, hospital, data_folder, weather_columns):
         self.hospital = hospital
         self.data_frequency = data_frequency
         self.covid_source = r'https://onemocneni-aktualne.mzcr.cz/api/v2/covid-19/'
         self.data_folder = data_folder
         self.scaler = MinMaxScaler()
-        self.end_date = datetime.datetime(2021, 11, 15, 23, 55, 0)
-        self.start_date = datetime.datetime(2017, 1, 1, 3)
-        self.weather_columns = ['temp', 'pres']  # ['temp', 'rhum', 'pres']
+        self.weather_columns = weather_columns
 
         self.google_m = MobilityGoogle()
         self.apple_m = MobilityApple()
         self.waze_m = MobilityWaze()
 
+    def _load_mobility(self, start_date, end_date):
+        google = pd.DataFrame.from_dict(self.google_m.get_mobility(), orient='index').sort_index()
+        google = google[start_date:end_date]
+
+        apple = pd.DataFrame.from_dict(self.apple_m.get_mobility(), orient='index').sort_index()
+        apple = apple[start_date:end_date]
+
+        waze_source = pd.DataFrame.from_dict(self.waze_m.get_mobility(), orient='index').sort_index()
+        waze = waze_source[start_date:end_date]
+        if waze.empty:
+            waze = waze_source[-1 - (end_date - start_date).days * 24:]
+        apple.fillna(0, inplace=True)
+        waze = waze.resample(f'{self.data_frequency}min').ffill()
+        apple = apple.resample(f'{self.data_frequency}min').ffill()
+        google = google.resample(f'{self.data_frequency}min').ffill()
+        waze.columns = ['waze']
+        apple.columns = ['apple']
+        return google, apple, waze
+
+    def _load_ikem_data(self):
+        all_files = glob.glob(str(self.data_folder / 'ikem' / "*.xlsx"))
+        li = []
+
+        for filename in all_files:
+            df = pd.read_excel(filename)
+            df['datum a čas'] = pd.to_datetime(df['datum a čas'])
+            df.set_index('datum a čas', inplace=True)
+            li.append(df)
+        this_year = pd.read_html(str(self.data_folder / 'vypis_9074.xls'))[0]
+        this_year['datum a čas'] = pd.to_datetime(this_year['datum a čas'])
+        this_year.set_index('datum a čas', inplace=True)
+        this_year = this_year.drop('Unnamed: 8', axis=1)
+        this_year = this_year[this_year['důvod'] != 'kardioverze']
+        li.append(this_year['2021-01-01':])
+        return pd.concat(li, axis=0)
+
+
+class DataFactory(AbstractFactory):
+    def __init__(self, data_frequency, hospital, data_folder, weather_columns, dtype=torch.float):
+        super().__init__(data_frequency=data_frequency,
+                         hospital=hospital,
+                         data_folder=data_folder,
+                         weather_columns=weather_columns)
+
+        self.end_date = datetime.datetime(2021, 11, 15, 23, 55, 0)
+        self.start_date = datetime.datetime(2017, 1, 1, 3)
         self.dset = self.create_timestamp(dtype=dtype)
 
     def create_timestamp(self, dtype=torch.float):
-        time_data = self.__load_ikem_data()
+        time_data = self._load_ikem_data()
 
         tmp_array = np.full((time_data.shape[0], 1), 0)
         time_data.insert(0, 'cases', tmp_array)
@@ -64,7 +115,7 @@ class DataFactory:
         selected_data.insert(1, 'day in week', selected_data.index.weekday)
         selected_data.insert(2, 'month', selected_data.index.month)
 
-        google, apple, waze = self.__load_mobility(start_date, end_date)
+        google, apple, waze = self._load_mobility(start_date, end_date)
 
         selected_data = selected_data.join(google[['retail_and_recreation_percent_change_from_baseline',
                                                    'residential_percent_change_from_baseline']])
@@ -77,109 +128,19 @@ class DataFactory:
         transformed_values = self.scaler.transform(selected_data.values)
         return torch.as_tensor(transformed_values)
 
-    def __load_mobility(self, start_date, end_date):
-        google = pd.DataFrame.from_dict(self.google_m.get_mobility(), orient='index').sort_index()
-        google = google[start_date:end_date]
-
-        apple = pd.DataFrame.from_dict(self.apple_m.get_mobility(), orient='index').sort_index()
-        apple = apple[start_date:end_date]
-
-        waze_source = pd.DataFrame.from_dict(self.waze_m.get_mobility(), orient='index').sort_index()
-        waze = waze_source[start_date:end_date]
-        if waze.empty:
-            waze = waze_source[-1 - (end_date - start_date).days * 24:]
-        apple.fillna(0, inplace=True)
-        waze = waze.resample(f'{self.data_frequency}min').ffill()
-        apple = apple.resample(f'{self.data_frequency}min').ffill()
-        google = google.resample(f'{self.data_frequency}min').ffill()
-        waze.columns = ['waze']
-        apple.columns = ['apple']
-        return google, apple, waze
-
-    def __load_ikem_data(self):
-        all_files = glob.glob(str(self.data_folder / 'ikem' / "*.xlsx"))
-        li = []
-
-        for filename in all_files:
-            df = pd.read_excel(filename)
-            df['datum a čas'] = pd.to_datetime(df['datum a čas'])
-            df.set_index('datum a čas', inplace=True)
-            li.append(df)
-        this_year = pd.read_html(str(self.data_folder / 'vypis_9074.xls'))[0]
-        this_year['datum a čas'] = pd.to_datetime(this_year['datum a čas'])
-        this_year.set_index('datum a čas', inplace=True)
-        this_year = this_year.drop('Unnamed: 8', axis=1)
-        this_year = this_year[this_year['důvod'] != 'kardioverze']
-        li.append(this_year['2021-01-01':])
-        return pd.concat(li, axis=0)
-
     def get_min_max(self):
         return self.dset[:][0].min(dim=0)[0].tolist(), self.dset[:][0].max(dim=0)[0].tolist()
 
     def inverse_transform(self, X: torch.Tensor):
         return self.scaler.inverse_transform(X.numpy())
 
-    def get_future_data(self, hour: int = 2, dtype=torch.float):
-        c_date = datetime.datetime.now()
-        h_weather = HistoricalWeather()
-        to_past = 24 - hour
-        index = pd.date_range(start=c_date - datetime.timedelta(hours=to_past),
-                              end=c_date + datetime.timedelta(hours=hour),
-                              freq=f"{self.data_frequency}min")
-        index = [pd.to_datetime(date) for date in index]
-        google, apple, waze = self.__load_mobility(index[0] - datetime.timedelta(days=7),
-                                                   index[-1] - datetime.timedelta(days=7))
-        data = h_weather.get_temperature(c_date - datetime.timedelta(hours=to_past),
-                                         c_date + datetime.timedelta(hours=hour))
-        df = data[self.weather_columns]
-        df.insert(0, 'hour', df.index.hour)
-        df.insert(1, 'day in week', df.index.weekday)
-        df.insert(2, 'month', df.index.month)
-        df.reset_index(drop=True, inplace=True)
-        google.reset_index(drop=True, inplace=True)
-        apple.reset_index(drop=True, inplace=True)
-        waze.reset_index(drop=True, inplace=True)
-        df = df.join(google[['retail_and_recreation_percent_change_from_baseline',
-                             'residential_percent_change_from_baseline']])
 
-        df = df.join(waze['waze'])
-        df = df.join(apple['apple'])
-        return torch.as_tensor(self.scaler.transform(df.values)).to(dtype)
-
-
-class OnlineFactory:
-    def __init__(self, data_frequency, hospital, data_folder, dtype=torch.float):
-        self.hospital = hospital
-        self.data_frequency = data_frequency
-        self.covid_source = r'https://onemocneni-aktualne.mzcr.cz/api/v2/covid-19/'
-        self.data_folder = data_folder
-        self.scaler = MinMaxScaler()
-        self.end_date = datetime.datetime(2021, 11, 15, 23, 55, 0)
-        self.start_date = datetime.datetime(2017, 1, 1, 3)
-        self.weather_columns = ['temp', 'pres']  # ['temp', 'rhum', 'pres']
-
-        self.google_m = MobilityGoogle()
-        self.apple_m = MobilityApple()
-        self.waze_m = MobilityWaze()
-
-    def __load_mobility(self, start_date, end_date):
-        google = pd.DataFrame.from_dict(self.google_m.get_mobility(), orient='index').sort_index()
-        google = google[start_date:end_date]
-
-        apple = pd.DataFrame.from_dict(self.apple_m.get_mobility(), orient='index').sort_index()
-        apple = apple[start_date:end_date]
-
-        waze_source = pd.DataFrame.from_dict(self.waze_m.get_mobility(), orient='index').sort_index()
-        waze = waze_source[start_date:end_date]
-        if waze.empty:
-            waze = waze_source[-1 - (end_date - start_date).days * 24:]
-        apple.fillna(0, inplace=True)
-        waze = waze.resample(f'{self.data_frequency}min').ffill()
-        apple = apple.resample(f'{self.data_frequency}min').ffill()
-        google = google.resample(f'{self.data_frequency}min').ffill()
-        waze.columns = ['waze']
-        apple.columns = ['apple']
-        return google, apple, waze
+class OnlineFactory(AbstractFactory):
+    def __init__(self, data_frequency, hospital, data_folder, weather_columns):
+        super().__init__(data_frequency=data_frequency,
+                         hospital=hospital,
+                         data_folder=data_folder,
+                         weather_columns=weather_columns)
 
     def get_prediction_data(self, c_date, to_future: int = 2, to_past: int = 24, dtype=torch.float):
         h_weather = HistoricalWeather()
@@ -188,8 +149,8 @@ class OnlineFactory:
                               freq=f"{self.data_frequency}min")
         index = [pd.to_datetime(date) for date in index]
 
-        google, apple, waze = self.__load_mobility(index[0] - datetime.timedelta(days=7),
-                                                   index[-1] - datetime.timedelta(days=7))
+        google, apple, waze = self._load_mobility(index[0] - datetime.timedelta(days=7),
+                                                  index[-1] - datetime.timedelta(days=7))
         data = h_weather.get_temperature(c_date - datetime.timedelta(hours=to_past),
                                          c_date + datetime.timedelta(hours=to_future))
         df = data[self.weather_columns]
@@ -206,29 +167,6 @@ class OnlineFactory:
         df = df.join(waze['waze'])
         df = df.join(apple['apple'])
         return torch.as_tensor(np.nan_to_num(self.scaler.transform(df.values))).to(dtype)
-
-    def create_timestamp(self, dtype=torch.float):
-        time_data = self.__load_ikem_data()
-
-        tmp_array = np.full((time_data.shape[0], 1), 0)
-        time_data.insert(0, 'cases', tmp_array)
-        return time_data
-
-    def __load_ikem_data(self):
-        all_files = glob.glob(str(self.data_folder / 'ikem' / "*.xlsx"))
-        li = []
-
-        for filename in all_files:
-            df = pd.read_excel(filename)
-            df['datum a čas'] = pd.to_datetime(df['datum a čas'])
-            df.set_index('datum a čas', inplace=True)
-            li.append(df)
-        this_year = pd.read_html(str(self.data_folder / 'vypis_9074.xls'))[0]
-        this_year['datum a čas'] = pd.to_datetime(this_year['datum a čas'])
-        this_year.set_index('datum a čas', inplace=True)
-        this_year = this_year.drop('Unnamed: 8', axis=1)
-        li.append(this_year['2021-01-01':])
-        return pd.concat(li, axis=0)
 
 
 def load_data(data_path):
@@ -253,8 +191,6 @@ if __name__ == '__main__':
     hack_config = HackConfig.from_config(args.config)
     data_loader = DataFactory(hack_config.data_frequency,
                               hospital=hack_config.hospital,
-                              data_folder=hack_config.data_folder)
+                              data_folder=hack_config.data_folder,
+                              weather_columns=hack_config.weather_columns)
     print(data_loader.get_min_max())
-    future = data_loader.get_future_data()
-    print(future.size())
-    print(future)

@@ -2,9 +2,6 @@ FROM python:3.8.8-buster
 
 LABEL version="2021.4.1" maintainer="petr.cezner@factorio.cz"
 
-#RUN apt-get update -y && \
-#    apt-get install -y python-pip python-dev
-
 COPY requirements.txt /app/requirements.txt
 
 WORKDIR /app
@@ -14,7 +11,10 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends build-essent
 
 
 COPY factorio/. /app/factorio
-COPY mnt/. /app/mnt
+COPY mnt/ikem/. /app/mnt/ikem
+
+COPY mnt/scaler.pkl /app/mnt/scaler.pkl
+COPY mnt/model_state*.pth /app/mnt/
 
 
 EXPOSE 8501

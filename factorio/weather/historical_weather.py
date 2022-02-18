@@ -11,7 +11,8 @@ class HistoricalWeather:
     def get_temperature(self,
                         start_date=datetime(2020, 8, 31),
                         end_date=datetime(2021, 11, 18, 23, 59)):
-
+        start_date = start_date.replace(tzinfo=None)
+        end_date = end_date.replace(tzinfo=None)
         data = Hourly(self.__location, start_date, end_date)
         data = data.fetch()
 
@@ -22,13 +23,13 @@ class HistoricalWeather:
 if __name__ == '__main__':
     historical_weather = HistoricalWeather()
 
-    start_date  = datetime(2020, 8, 31)
-    end_date    = datetime(2021, 11, 18, 23, 59)
-    data = historical_weather.get_temperature(start_date, end_date)
+    start_date_ = datetime(2020, 8, 31)
+    end_date_ = datetime(2021, 11, 18, 23, 59)
+    data_ = historical_weather.get_temperature(start_date_, end_date_)
 
     # temperature in celsius
     # pressure in hPa
 
-    data.plot(y=['temp'])
-    data.plot(y=['pres'])
+    data_.plot(y=['temp'])
+    data_.plot(y=['pres'])
     plt.show()

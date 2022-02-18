@@ -44,11 +44,12 @@ if __name__ == '__main__':
 
     hack_config = data_loader.HackConfig.from_config(args.config)
 
-    output_path = f'mnt/model_state_{time_now.strftime("%y%m%d-%H%M%S")}.pth'
+    output_path = f'mnt/model_state_{time_now.strftime("%Y%m%d-%H%M%S")}.pth'
 
     dfactory = data_loader.DataFactory(data_frequency=hack_config.data_frequency,
                                        hospital=hack_config.hospital,
                                        data_folder=hack_config.data_folder,
+                                       weather_columns=hack_config.weather_columns,
                                        dtype=dtype)
 
     X_mins, X_maxs = dfactory.get_min_max()

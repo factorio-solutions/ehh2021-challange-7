@@ -1,18 +1,13 @@
 import datetime
 from pathlib import Path
 
-import numpy as np
-import pandas as pd
-import requests
+import pytz
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 import plotly.express as px
 import argparse
 import torch
-import sys
-import os
 
-sys.path.extend([r'C:\Projects\ehh2021-challange-7', os.getcwd()])
 from factorio.core.run_load_model import Oracle, get_current_prediction
 from factorio.utils import data_loader
 
@@ -20,23 +15,12 @@ st.set_page_config(
     page_title="Patient Arrival Prediction",
     page_icon=":hearth:",
     layout="centered",
-    # menu_items={
-    #     'Get Help': 'https://www.extremelycoolapp.com/help',
-    #     'Report a bug': "https://www.extremelycoolapp.com/bug",
-    #     'About': "# This is a header. This is an *extremely* cool app!"
-    # }
 )
 
 count = st_autorefresh(interval=5 * 60 * 1000, limit=1000, key="fizzbuzzcounter")
 
 dtype = torch.float
 parser = argparse.ArgumentParser()
-
-headers_dict = {"Accept": "application/fhir+json",
-                "Content-Type": "application/fhir+json",
-                "x-api-key": "020kStOlLF7LWx9AXjWrf6M3KMjxd68i5ruIhz4g"}
-url = "https://fhir.kt1n1r83jp32.static-test-account.isccloud.io"
-
 path_parser = parser.add_argument('-c', '--config', type=Path, default='config.ini',
                                   help='Set path to your config.ini file.')
 
@@ -54,7 +38,7 @@ def get_factory():
     return data_loader.OnlineFactory(data_frequency=hack_config.data_frequency,
                                      hospital=hack_config.hospital,
                                      data_folder=hack_config.data_folder,
-                                     dtype=dtype)
+                                     weather_columns=hack_config.weather_columns)
 
 
 dfactory = get_factory()
@@ -68,7 +52,8 @@ def create_ora():
 
 ora = create_ora()
 
-c_date = datetime.datetime.now()
+tz = pytz.timezone('Europe/Prague')
+c_date = datetime.datetime.now(tz)
 st.subheader('Patient arriver prediction')
 # hour = st.slider('Prediction Window', 0, 23, 2)
 hour = 4

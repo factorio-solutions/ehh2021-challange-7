@@ -4,4 +4,4 @@ services:
     build: ""
     ports:
       - "8501:8501"
-    image:  mi10mod.azurecr.io/zcaseplus:v0.0.2
+    image:  mi10mod.azurecr.io/zcaseplus:2022.1.0

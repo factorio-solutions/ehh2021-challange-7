@@ -4,7 +4,8 @@ from pathlib import Path
 
 class HackConfig:
     def __init__(self, z_case, data_frequency, trials, inter_trials, experiment_name, valid_size, use_gpu,
-                 cv_ratios_start, cv_ratios_stop, cv_ratios_steps, data_folder, hospital, model_path):
+                 cv_ratios_start, cv_ratios_stop, cv_ratios_steps, data_folder, hospital, model_path,
+                 weather_columns):
         self.z_case = z_case
         self.data_frequency = data_frequency
         self.trials = trials
@@ -18,6 +19,7 @@ class HackConfig:
         self.data_folder = data_folder
         self.hospital = hospital
         self.model_path = model_path
+        self.weather_columns = weather_columns
 
     @classmethod
     def from_config(cls, config_file):
@@ -39,6 +41,7 @@ class HackConfig:
         cv_ratios_steps = config['ax'].getint('cv_ratios_steps', fallback=100)
 
         model_path = Path(config['model'].get('model_path', fallback='mnt/model_state.pth'))
+        weather_columns = config['model'].get('weather_columns', fallback='temp, pres').split(', ')
 
         return cls(z_case=z_case,
                    data_frequency=data_frequency,
@@ -52,4 +55,5 @@ class HackConfig:
                    cv_ratios_steps=cv_ratios_steps,
                    data_folder=data_folder,
                    hospital=hospital,
-                   model_path=model_path)
+                   model_path=model_path,
+                   weather_columns=weather_columns)
