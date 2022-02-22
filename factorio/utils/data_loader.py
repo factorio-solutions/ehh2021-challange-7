@@ -166,7 +166,7 @@ class OnlineFactory(AbstractFactory):
 
         df = df.join(waze['waze'])
         df = df.join(apple['apple'])
-        return torch.as_tensor(np.nan_to_num(self.scaler.transform(df.values))).to(dtype)
+        return torch.as_tensor(np.nan_to_num(self.scaler.transform(df.values))).to(dtype), df.columns
 
 
 def load_data(data_path):

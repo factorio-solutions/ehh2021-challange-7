@@ -12,17 +12,8 @@ import os
 
 sys.path.extend([os.getcwd()])
 from factorio.core.run_load_model import Oracle, get_current_prediction
-from factorio.utils import data_loader
+from factorio.utils import data_loader, init_logger
 
-st.set_page_config(
-    page_title="Patient Arrival Prediction",
-    page_icon=":hearth:",
-    layout="centered",
-)
-
-count = st_autorefresh(interval=5 * 60 * 1000, limit=1000, key="fizzbuzzcounter")
-
-dtype = torch.float
 parser = argparse.ArgumentParser()
 path_parser = parser.add_argument('-c', '--config', type=Path, default='config.ini',
                                   help='Set path to your config.ini file.')
@@ -33,6 +24,17 @@ if not args.config.exists():
                                               f"to config.ini file, please check it!")
 
 hack_config = data_loader.HackConfig.from_config(args.config)
+logger = init_logger('zCase_plus', hack_config.log_debug, hack_config.log_path)
+
+st.set_page_config(
+    page_title="Očekávané příchody pacientů",
+    page_icon=":hearth:",
+    layout="centered",
+)
+
+count = st_autorefresh(interval=5 * 60 * 1000, limit=1000, key="fizzbuzzcounter")
+
+dtype = torch.float
 
 
 @st.cache(hash_funcs={torch.nn.parameter.Parameter: lambda parameter: parameter.data.numpy()},
@@ -57,19 +59,21 @@ ora = create_ora()
 
 tz = pytz.timezone('Europe/Prague')
 c_date = datetime.datetime.now(tz)
-st.subheader('Patient arriver prediction')
+st.subheader('Očekávané příchody pacientů')
 # hour = st.slider('Prediction Window', 0, 23, 2)
 hour = 4
 
 df = get_current_prediction(ora.model, ora.dsfactory, hour)
-df.index.name = 'Datetime'
-fig = px.bar(df)
+df.index.name = 'Čas'
+logger.info(f'Current prediction: {df.to_dict()}')
+fig = px.bar(df['Arrivals Hourly Rate'])
 fig.add_vrect(x0=c_date, x1=c_date + datetime.timedelta(minutes=5),
-              annotation_text="Current time", annotation_position="top left",
+              annotation_text="Aktuální čas", annotation_position="top left",
               fillcolor="black", opacity=0.5, line_width=0)
 
 fig.update_yaxes(title='y', visible=False, showticklabels=False)
-fig.update_xaxes(title='', visible=True, showticklabels=False)
+# fig.update_xaxes(title='', visible=True, showticklabels=False)
+fig.update_xaxes(tickformat="%H:%M")
 fig.update_layout(showlegend=False,
                   margin=dict(l=0, r=0, t=0, b=0, pad=4))
 st.plotly_chart(fig, use_container_width=True)

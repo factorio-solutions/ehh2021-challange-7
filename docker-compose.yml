@@ -6,6 +6,8 @@ services:
       - "10.35.16.77:8501:8501"
     image:  mi10mod.azurecr.io/zcaseplus:2022.1.0
     restart: always
+    volumes:
+      - /home/petr/Projects/tests/logs/:/app/mnt/logs/
     deploy:
       resources:
         limits:

@@ -5,11 +5,14 @@ import pandas as pd
 import pytz
 import torch
 import pickle
+import logging
 
 from factorio.gpmodels.gplognormpl import LogNormGPpl
 from factorio.utils import data_loader
 from factorio.utils.helpers import percentiles_from_samples
 import plotly.express as px
+
+logger = logging.getLogger('run_load_model.py')
 
 
 class Oracle:
@@ -27,8 +30,7 @@ class Oracle:
 def get_current_prediction(model, dsfactory, to_future: int = 2):
     tz = pytz.timezone('Europe/Prague')
     c_date = datetime.datetime.now(tz)
-    current_data = dsfactory.get_prediction_data(c_date, to_future=to_future, to_past=to_future + 1)
-    # to_past = 23 - to_future
+    current_data, column_names = dsfactory.get_prediction_data(c_date, to_future=to_future, to_past=to_future + 1)
     to_past = to_future
     index = pd.date_range(start=c_date - datetime.timedelta(hours=to_past),
                           end=c_date + datetime.timedelta(hours=to_future),
@@ -39,14 +41,17 @@ def get_current_prediction(model, dsfactory, to_future: int = 2):
     rate_samples = output.rsample(torch.Size([1000])).exp()
 
     percentile, = percentiles_from_samples(rate_samples, [0.8])
-    return pd.DataFrame(percentile,  # np.abs(np.random.randn(24, 1)),
-                        columns=['Arrivals Hourly Rate'],
-                        index=[pd.to_datetime(date) for date in index]
-                        )
+    df = pd.DataFrame(percentile,
+                      columns=['Arrivals Hourly Rate'],
+                      index=[pd.to_datetime(date) for date in index]
+                      )
+    for col, i in zip(column_names, range(current_data.shape[1])):
+        df[col] = current_data[:, i].detach().cpu().numpy()
+    return df
 
 
 def get_past_prediction(model, dsfactory, past_date, to_future: int = 2, to_past: int = 168):
-    current_data = dsfactory.get_prediction_data(past_date, to_future, to_past=to_past)
+    current_data, _ = dsfactory.get_prediction_data(past_date, to_future, to_past=to_past)
     index = pd.date_range(start=past_date - datetime.timedelta(hours=to_past - 1),
                           end=past_date + datetime.timedelta(hours=to_future),
                           freq=f"{60}min")
@@ -91,10 +96,10 @@ if __name__ == '__main__':
     #                                      dtype=dtype)
 
     dfactory = data_loader.DataFactory(data_frequency=hack_config.data_frequency,
-                                         teams=hack_config.teams,
-                                         hospital=hack_config.hospital,
-                                         data_folder=hack_config.data_folder,
-                                         dtype=dtype)
+                                       teams=hack_config.teams,
+                                       hospital=hack_config.hospital,
+                                       data_folder=hack_config.data_folder,
+                                       dtype=dtype)
 
     model = LogNormGPpl.load_model(hack_config.model_path)
 
@@ -105,8 +110,8 @@ if __name__ == '__main__':
     x_plt = dfactory.data[-show:].index.values
 
     pressure = dfactory.data[-show:]['pres']
-    pressure_zeroed = pressure-min(pressure)
-    pressure_norm = pressure_zeroed/max(pressure_zeroed)
+    pressure_zeroed = pressure - min(pressure)
+    pressure_norm = pressure_zeroed / max(pressure_zeroed)
 
     model.eval()
     with torch.no_grad():
@@ -141,7 +146,7 @@ if __name__ == '__main__':
         x_plt, y_sim_lower.detach().cpu(),
         y_sim_upper.detach().cpu(), color=y_sim_plt[0].get_color(), alpha=0.1
     )
-    
+
     ax_samp.plot(x_plt, pressure_norm, label='Pressure MinMax transformed')
     ax_samp.legend()
     fig.tight_layout()

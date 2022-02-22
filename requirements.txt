@@ -14,3 +14,4 @@ pyro-ppl
 streamlit_autorefresh
 streamlit
 plotly
+colorlog

@@ -1,11 +1,10 @@
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime
 
 
 class MobilityWaze:
     def __init__(self):
-        url = r'https://raw.githubusercontent.com/ActiveConclusion/' \
-              r'waze_mobility_scraper/master/Waze_City-Level_Data.csv'
+        url = r'https://raw.githubusercontent.com/ActiveConclusion/waze_mobility_scraper/master/Waze_City-Level_Data.csv'
         self.__reports_df = pd.read_csv(url)
 
     def get_mobility(self,
@@ -16,7 +15,6 @@ class MobilityWaze:
         mobility = mobility.iloc[::-1]
         mobility = mobility[['Date',
                              '% Change In Waze Driven Miles/KMs']]
-
         hourly_mobility = {}
         for index, mob in mobility.iterrows():
             time = mob['Date'].split(", ")

@@ -5,7 +5,7 @@ from pathlib import Path
 class HackConfig:
     def __init__(self, z_case, data_frequency, trials, inter_trials, experiment_name, valid_size, use_gpu,
                  cv_ratios_start, cv_ratios_stop, cv_ratios_steps, data_folder, hospital, model_path,
-                 weather_columns):
+                 weather_columns, log_debug, log_path):
         self.z_case = z_case
         self.data_frequency = data_frequency
         self.trials = trials
@@ -20,6 +20,8 @@ class HackConfig:
         self.hospital = hospital
         self.model_path = model_path
         self.weather_columns = weather_columns
+        self.log_debug = log_debug
+        self.log_path = log_path
 
     @classmethod
     def from_config(cls, config_file):
@@ -43,6 +45,9 @@ class HackConfig:
         model_path = Path(config['model'].get('model_path', fallback='mnt/model_state.pth'))
         weather_columns = config['model'].get('weather_columns', fallback='temp, pres').split(', ')
 
+        log_debug = config['logging'].getboolean('debug', fallback=False)
+        log_path = Path(config['logging'].get('path', fallback='app/mnt/logs'))
+
         return cls(z_case=z_case,
                    data_frequency=data_frequency,
                    trials=trials,
@@ -56,4 +61,6 @@ class HackConfig:
                    data_folder=data_folder,
                    hospital=hospital,
                    model_path=model_path,
-                   weather_columns=weather_columns)
+                   weather_columns=weather_columns,
+                   log_debug=log_debug,
+                   log_path=log_path)
