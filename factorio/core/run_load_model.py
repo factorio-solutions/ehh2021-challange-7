@@ -26,7 +26,7 @@ class Oracle:
         self.dsfactory = dsfactory
         self.model = LogNormGPpl.load_model(model_path)
 
-        with open('mnt/scaler.pkl', 'rb') as fid:
+        with open('learnedmodels/scaler.pkl', 'rb') as fid:
             self.dsfactory.scaler = pickle.load(fid)
         self.model.eval()
 
