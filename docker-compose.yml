@@ -3,8 +3,8 @@ services:
   zcaseplus:
     build: ""
     ports:
-      - "10.35.16.77:8501:8501"
-    image:  zcaseregistry.azurecr.io/zcaseplus:2022.1.0
+      - "0.0.0.0:8501:8501"
+    image:  zcaseplus:2022.2.0
     restart: always
     volumes:
       - /home/petr/Projects/tests/logs/:/app/mnt/logs/

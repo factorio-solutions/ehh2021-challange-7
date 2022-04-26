@@ -11,7 +11,6 @@ from factorio.mobility.mobility_apple import MobilityApple
 from factorio.mobility.mobility_google import MobilityGoogle
 from factorio.mobility.mobility_waze import MobilityWaze
 from factorio.utils.hack_config import HackConfig
-from factorio.web_scraping.football import Football
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter(action='ignore', category=DtypeWarning)
@@ -39,27 +38,27 @@ class AbstractFactory(abc.ABC):
         self.weather_columns = weather_columns
 
         self.google_m = MobilityGoogle()
-        self.apple_m = MobilityApple()
+        # self.apple_m = MobilityApple()
         self.waze_m = MobilityWaze()
 
     def _load_mobility(self, start_date, end_date):
         google = pd.DataFrame.from_dict(self.google_m.get_mobility(), orient='index').sort_index()
         google = google[start_date:end_date]
 
-        apple = pd.DataFrame.from_dict(self.apple_m.get_mobility(), orient='index').sort_index()
-        apple = apple[start_date:end_date]
+        # apple = pd.DataFrame.from_dict(self.apple_m.get_mobility(), orient='index').sort_index()
+        # apple = apple[start_date:end_date]
 
         waze_source = pd.DataFrame.from_dict(self.waze_m.get_mobility(), orient='index').sort_index()
         waze = waze_source[start_date:end_date]
         if waze.empty:
             waze = waze_source[-1 - (end_date - start_date).days * 24:]
-        apple.fillna(0, inplace=True)
+        # apple.fillna(0, inplace=True)
         waze = waze.resample(f'{self.data_frequency}min').ffill()
-        apple = apple.resample(f'{self.data_frequency}min').ffill()
+        # apple = apple.resample(f'{self.data_frequency}min').ffill()
         google = google.resample(f'{self.data_frequency}min').ffill()
         waze.columns = ['waze']
-        apple.columns = ['apple']
-        return google, apple, waze
+        # apple.columns = ['apple']
+        return google, waze
 
     def _load_ikem_data(self):
         all_files = glob.glob(str(self.data_folder / 'ikem' / "*.xlsx"))
@@ -115,13 +114,13 @@ class DataFactory(AbstractFactory):
         selected_data.insert(1, 'day in week', selected_data.index.weekday)
         selected_data.insert(2, 'month', selected_data.index.month)
 
-        google, apple, waze = self._load_mobility(start_date, end_date)
+        google, waze = self._load_mobility(start_date, end_date)
 
         selected_data = selected_data.join(google[['retail_and_recreation_percent_change_from_baseline',
                                                    'residential_percent_change_from_baseline']])
 
         selected_data = selected_data.join(waze['waze'])
-        selected_data = selected_data.join(apple['apple'])
+        # selected_data = selected_data.join(apple['apple'])
         selected_data.fillna(0, inplace=True)
         self.data = selected_data
         self.scaler.fit(selected_data.values)
@@ -149,7 +148,7 @@ class OnlineFactory(AbstractFactory):
                               freq=f"{self.data_frequency}min")
         index = [pd.to_datetime(date) for date in index]
 
-        google, apple, waze = self._load_mobility(index[0] - datetime.timedelta(days=7),
+        google, waze = self._load_mobility(index[0] - datetime.timedelta(days=7),
                                                   index[-1] - datetime.timedelta(days=7))
         data = h_weather.get_temperature(c_date - datetime.timedelta(hours=to_past),
                                          c_date + datetime.timedelta(hours=to_future))
@@ -159,13 +158,13 @@ class OnlineFactory(AbstractFactory):
         df.insert(2, 'month', df.index.month)
         df.reset_index(drop=True, inplace=True)
         google.reset_index(drop=True, inplace=True)
-        apple.reset_index(drop=True, inplace=True)
+        # apple.reset_index(drop=True, inplace=True)
         waze.reset_index(drop=True, inplace=True)
         df = df.join(google[['retail_and_recreation_percent_change_from_baseline',
                              'residential_percent_change_from_baseline']])
 
         df = df.join(waze['waze'])
-        df = df.join(apple['apple'])
+        # df = df.join(apple['apple'])
         return torch.as_tensor(np.nan_to_num(self.scaler.transform(df.values))).to(dtype), df.columns
 
 
