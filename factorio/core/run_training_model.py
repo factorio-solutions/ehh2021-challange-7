@@ -44,7 +44,7 @@ if __name__ == '__main__':
 
     hack_config = data_loader.HackConfig.from_config(args.config)
 
-    output_path = f'mnt/model_state_{time_now.strftime("%Y%m%d-%H%M%S")}.pth'
+    output_path = f'learnedmodels/model_state_{time_now.strftime("%Y%m%d-%H%M%S")}.pth'
 
     dfactory = data_loader.DataFactory(data_frequency=hack_config.data_frequency,
                                        hospital=hack_config.hospital,
@@ -79,7 +79,7 @@ if __name__ == '__main__':
         use_gpu=hack_config.use_gpu)
 
     model.save_model(output_path)
-    with open('mnt/scaler.pkl', 'wb') as fid:
+    with open('learnedmodels/scaler.pkl', 'wb') as fid:
         pickle.dump(dfactory.scaler, fid)
     show = 200
     test_x = dfactory.dset[-show:][0]
