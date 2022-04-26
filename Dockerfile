@@ -1,21 +1,33 @@
-FROM python:3.8.8-buster
+FROM python:3.8.12-buster
 
 LABEL version="2021.4.1" maintainer="petr.cezner@factorio.cz"
 
-#RUN apt-get update -y && \
-#    apt-get install -y python-pip python-dev
+ENV PYTHONFAULTHANDLER=1 \
+  PYTHONUNBUFFERED=1 \
+  PYTHONHASHSEED=random \
+  PIP_NO_CACHE_DIR=off \
+  PIP_DISABLE_PIP_VERSION_CHECK=on \
+  PIP_DEFAULT_TIMEOUT=100 \
+  POETRY_VERSION=1.1.0
 
-COPY requirements.txt /app/requirements.txt
+RUN pip install --upgrade pip
+RUN pip install "poetry==$POETRY_VERSION"
+
 
 WORKDIR /app
 
-RUN pip install -r requirements.txt
-RUN apt-get update -y && apt-get install -y --no-install-recommends build-essential gcc libsndfile1
+COPY poetry.lock /app/
+COPY pyproject.toml /app/
 
 
 COPY factorio/. /app/factorio
-COPY mnt/. /app/mnt
+COPY mnt/ikem/. /app/mnt/ikem
 
+COPY mnt/scaler.pkl /app/mnt/scaler.pkl
+COPY mnt/model_state*.pth /app/mnt/
+
+RUN poetry config virtualenvs.create false \
+  && poetry install --no-dev --no-interaction --no-ansi
 
 EXPOSE 8501
 ENTRYPOINT ["streamlit", "run"]

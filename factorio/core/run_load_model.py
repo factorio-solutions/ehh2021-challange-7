@@ -7,6 +7,7 @@ import pandas as pd
 from pandas.core.indexes.datetimes import DatetimeIndex
 import torch
 import pickle
+import logging
 
 from torch import distributions
 
@@ -14,6 +15,8 @@ from factorio.gpmodels.gplognormpl import LogNormGPpl
 from factorio.utils import data_loader
 from factorio.utils.helpers import percentiles_from_samples
 import plotly.express as px
+
+logger = logging.getLogger('run_load_model.py')
 
 
 class Oracle:
@@ -101,9 +104,10 @@ class Oracle:
 
 
 def get_current_prediction(model, dsfactory, to_future: int = 2):
-    c_date = datetime.datetime.now()
-    current_data = dsfactory.get_prediction_data(c_date, to_future)
-    to_past = 23 - to_future
+    tz = pytz.timezone('Europe/Prague')
+    c_date = datetime.datetime.now(tz)
+    current_data, column_names = dsfactory.get_prediction_data(c_date, to_future=to_future, to_past=to_future + 1)
+    to_past = to_future
     index = pd.date_range(start=c_date - datetime.timedelta(hours=to_past),
                           end=c_date + datetime.timedelta(hours=to_future),
                           freq=f"{60}min")
@@ -113,10 +117,13 @@ def get_current_prediction(model, dsfactory, to_future: int = 2):
     rate_samples = output.rsample(torch.Size([1000])).exp()
 
     percentile, = percentiles_from_samples(rate_samples, [0.8])
-    return pd.DataFrame(percentile,  # np.abs(np.random.randn(24, 1)),
-                        columns=['Arrivals Hourly Rate'],
-                        index=[pd.to_datetime(date) for date in index]
-                        )
+    df = pd.DataFrame(percentile,
+                      columns=['Arrivals Hourly Rate'],
+                      index=[pd.to_datetime(date) for date in index]
+                      )
+    for col, i in zip(column_names, range(current_data.shape[1])):
+        df[col] = current_data[:, i].detach().cpu().numpy()
+    return df
 
 
 def get_past_prediction(model, dsfactory, past_date, to_future: int = 2, to_past: int = 168):
@@ -176,8 +183,8 @@ if __name__ == '__main__':
     x_plt = dfactory.data[-show:].index.values
 
     pressure = dfactory.data[-show:]['pres']
-    pressure_zeroed = pressure-min(pressure)
-    pressure_norm = pressure_zeroed/max(pressure_zeroed)
+    pressure_zeroed = pressure - min(pressure)
+    pressure_norm = pressure_zeroed / max(pressure_zeroed)
 
     model.eval()
     with torch.no_grad():

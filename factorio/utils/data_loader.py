@@ -1,16 +1,21 @@
+import abc
 import datetime
 import functools
 import glob
 from pathlib import Path
 import warnings
+
+from pandas.core.common import SettingWithCopyWarning
+from pandas.errors import DtypeWarning
+
 from factorio.mobility.mobility_apple import MobilityApple
 from factorio.mobility.mobility_google import MobilityGoogle
 from factorio.mobility.mobility_waze import MobilityWaze
 from factorio.utils.hack_config import HackConfig
-from factorio.web_scraping.football import Football
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
-import matplotlib.pyplot as plt
+warnings.simplefilter(action='ignore', category=DtypeWarning)
+warnings.simplefilter(action='ignore', category=SettingWithCopyWarning)
 import numpy as np
 import pandas as pd
 import torch
@@ -24,28 +29,69 @@ from factorio.weather import ActualWeather, HistoricalWeather
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 
-class DataFactory:
-    def __init__(self, data_frequency, hospital, teams, data_folder, dtype=torch.float):
-        self.teams = teams
+class AbstractFactory(abc.ABC):
+    def __init__(self, data_frequency, hospital, data_folder, weather_columns):
         self.hospital = hospital
         self.data_frequency = data_frequency
         self.covid_source = r'https://onemocneni-aktualne.mzcr.cz/api/v2/covid-19/'
         self.data_folder = data_folder
         self.scaler = MinMaxScaler()
-        self.end_date = datetime.datetime(2021, 11, 15, 23, 55, 0)
-        self.start_date = datetime.datetime(2017, 1, 1, 3)
-        self.football = Football(self.teams)
-        self.g_reports = [str(self.data_folder / '2020_CZ_Region_Mobility_Report.csv'),
-                          str(self.data_folder / '2021_CZ_Region_Mobility_Report.csv')]
+        self.weather_columns = weather_columns
 
-        self.google_m = MobilityGoogle(reports=self.g_reports)
-        self.apple_m = MobilityApple()
+        self.google_m = MobilityGoogle()
+        # self.apple_m = MobilityApple()
         self.waze_m = MobilityWaze()
 
+    def _load_mobility(self, start_date, end_date):
+        google = pd.DataFrame.from_dict(self.google_m.get_mobility(), orient='index').sort_index()
+        google = google[start_date:end_date]
+
+        # apple = pd.DataFrame.from_dict(self.apple_m.get_mobility(), orient='index').sort_index()
+        # apple = apple[start_date:end_date]
+
+        waze_source = pd.DataFrame.from_dict(self.waze_m.get_mobility(), orient='index').sort_index()
+        waze = waze_source[start_date:end_date]
+        if waze.empty:
+            waze = waze_source[-1 - (end_date - start_date).days * 24:]
+        # apple.fillna(0, inplace=True)
+        waze = waze.resample(f'{self.data_frequency}min').ffill()
+        # apple = apple.resample(f'{self.data_frequency}min').ffill()
+        google = google.resample(f'{self.data_frequency}min').ffill()
+        waze.columns = ['waze']
+        # apple.columns = ['apple']
+        return google, waze
+
+    def _load_ikem_data(self):
+        all_files = glob.glob(str(self.data_folder / 'ikem' / "*.xlsx"))
+        li = []
+
+        for filename in all_files:
+            df = pd.read_excel(filename)
+            df['datum a čas'] = pd.to_datetime(df['datum a čas'])
+            df.set_index('datum a čas', inplace=True)
+            li.append(df)
+        this_year = pd.read_html(str(self.data_folder / 'vypis_9074.xls'))[0]
+        this_year['datum a čas'] = pd.to_datetime(this_year['datum a čas'])
+        this_year.set_index('datum a čas', inplace=True)
+        this_year = this_year.drop('Unnamed: 8', axis=1)
+        this_year = this_year[this_year['důvod'] != 'kardioverze']
+        li.append(this_year['2021-01-01':])
+        return pd.concat(li, axis=0)
+
+
+class DataFactory(AbstractFactory):
+    def __init__(self, data_frequency, hospital, data_folder, weather_columns, dtype=torch.float):
+        super().__init__(data_frequency=data_frequency,
+                         hospital=hospital,
+                         data_folder=data_folder,
+                         weather_columns=weather_columns)
+
+        self.end_date = datetime.datetime(2021, 11, 15, 23, 55, 0)
+        self.start_date = datetime.datetime(2017, 1, 1, 3)
         self.dset = self.create_timestamp(dtype=dtype)
 
     def create_timestamp(self, dtype=torch.float):
-        time_data = self.__load_ikem_data()
+        time_data = self._load_ikem_data()
 
         tmp_array = np.full((time_data.shape[0], 1), 0)
         time_data.insert(0, 'cases', tmp_array)
@@ -64,75 +110,23 @@ class DataFactory:
         data = historical_weather.get_temperature(start_date, end_date)
         data.fillna(0, inplace=True)
         data = data.resample(f'{self.data_frequency}min').ffill()
-        selected_data = data[['temp', 'rhum', 'pres']]
-        # selected_data = selected_data.append(selected_data.iloc[-1])
-        selected_data = selected_data.diff()
+        selected_data = data[self.weather_columns]
         selected_data.insert(0, 'hour', selected_data.index.hour)
         selected_data.insert(1, 'day in week', selected_data.index.weekday)
         selected_data.insert(2, 'dayofyear', selected_data.index.dayofyear)
 
-        football = self.load_football(start_date, end_date)
-        google, apple, waze = self.__load_mobility(start_date, end_date)
+        google, waze = self._load_mobility(start_date, end_date)
 
-        incidence = self.__load_incidence(start_date, end_date)
-        selected_data.insert(6, 'football', football.values)
         selected_data = selected_data.join(google[['retail_and_recreation_percent_change_from_baseline',
                                                    'residential_percent_change_from_baseline']])
 
         selected_data = selected_data.join(waze['waze'])
-        selected_data = selected_data.join(apple['apple'])
-        selected_data = selected_data.join(incidence['incidence_7_100000'])
+        # selected_data = selected_data.join(apple['apple'])
         selected_data.fillna(0, inplace=True)
         self.data = selected_data
         self.scaler.fit(selected_data.values)
         transformed_values = self.scaler.transform(selected_data.values)
         return torch.as_tensor(transformed_values)
-
-    def __load_mobility(self, start_date, end_date):
-        google = pd.DataFrame.from_dict(self.google_m.get_mobility(), orient='index')
-        google = google[start_date:end_date]
-
-        apple = pd.DataFrame.from_dict(self.apple_m.get_mobility(), orient='index')
-        apple = apple[start_date:end_date]
-
-        waze = pd.DataFrame.from_dict(self.waze_m.get_mobility(), orient='index')
-        waze = waze[start_date:end_date]
-        apple.fillna(0, inplace=True)
-        waze = waze.resample(f'{self.data_frequency}min').ffill()
-        apple = apple.resample(f'{self.data_frequency}min').ffill()
-        google = google.resample(f'{self.data_frequency}min').ffill()
-        waze.columns = ['waze']
-        apple.columns = ['apple']
-        return google, apple, waze
-
-    def __load_ikem_data(self):
-        all_files = glob.glob(str(self.data_folder / 'ikem' / "*.xlsx"))
-        li = []
-
-        for filename in all_files:
-            df = pd.read_excel(filename)
-            df['datum a čas'] = pd.to_datetime(df['datum a čas'])
-            df.set_index('datum a čas', inplace=True)
-            li.append(df)
-        this_year = pd.read_html(str(self.data_folder / 'vypis_9074.xls'))[0]
-        this_year['datum a čas'] = pd.to_datetime(this_year['datum a čas'])
-        this_year.set_index('datum a čas', inplace=True)
-        this_year = this_year.drop('Unnamed: 8', axis=1)
-        this_year = this_year[this_year['důvod'] != 'kardioverze']
-        li.append(this_year['2021-01-01':])
-        return pd.concat(li, axis=0)
-
-    def __load_incidence(self, start_date, end_date):
-        data_incidence = pd.read_csv(rf'{self.covid_source}incidence-7-14-cr.csv')
-        data_incidence.dropna(inplace=True)
-        data_incidence['datum'] = pd.to_datetime(data_incidence['datum'])
-        data_incidence.set_index('datum', drop=True, inplace=True)
-        return data_incidence.resample(f'{self.data_frequency}min').ffill()[start_date:end_date]
-
-    def load_football(self, start_date, end_date):
-        hourly_visitors = self.football.get_visitors(start_date, end_date)
-        df = pd.DataFrame.from_dict(hourly_visitors, orient='index')
-        return df.resample(f'{self.data_frequency}min').ffill()[start_date:end_date]
 
     def get_min_max(self):
         return self.dset[:][0].min(dim=0)[0].tolist(), self.dset[:][0].max(dim=0)[0].tolist()
@@ -244,42 +238,15 @@ class OnlineFactory:
         df.insert(1, 'day in week', df.index.weekday)
         df.insert(2, 'dayofyear', df.index.dayofyear)
         df.reset_index(drop=True, inplace=True)
-        football_data.reset_index(drop=True, inplace=True)
         google.reset_index(drop=True, inplace=True)
-        apple.reset_index(drop=True, inplace=True)
+        # apple.reset_index(drop=True, inplace=True)
         waze.reset_index(drop=True, inplace=True)
-        incidence.reset_index(drop=True, inplace=True)
-        df = df.join(football_data)
         df = df.join(google[['retail_and_recreation_percent_change_from_baseline',
                              'residential_percent_change_from_baseline']])
 
         df = df.join(waze['waze'])
-        df = df.join(apple['apple'])
-        df = df.join(incidence['incidence_7_100000'])
-        return torch.as_tensor(np.nan_to_num(self.scaler.transform(df.values))).to(dtype)
-
-    def create_timestamp(self, dtype=torch.float):
-        time_data = self.__load_ikem_data()
-
-        tmp_array = np.full((time_data.shape[0], 1), 0)
-        time_data.insert(0, 'cases', tmp_array)
-        return time_data
-
-    def __load_ikem_data(self):
-        all_files = glob.glob(str(self.data_folder / 'ikem' / "*.xlsx"))
-        li = []
-
-        for filename in all_files:
-            df = pd.read_excel(filename)
-            df['datum a čas'] = pd.to_datetime(df['datum a čas'])
-            df.set_index('datum a čas', inplace=True)
-            li.append(df)
-        this_year = pd.read_html(str(self.data_folder / 'vypis_9074.xls'))[0]
-        this_year['datum a čas'] = pd.to_datetime(this_year['datum a čas'])
-        this_year.set_index('datum a čas', inplace=True)
-        this_year = this_year.drop('Unnamed: 8', axis=1)
-        li.append(this_year['2021-01-01':])
-        return pd.concat(li, axis=0)
+        # df = df.join(apple['apple'])
+        return torch.as_tensor(np.nan_to_num(self.scaler.transform(df.values))).to(dtype), df.columns
 
 
 def load_data(data_path):
@@ -303,9 +270,9 @@ if __name__ == '__main__':
 
     hack_config = HackConfig.from_config(args.config)
     data_loader = DataFactory(hack_config.data_frequency,
-                              teams=hack_config.teams,
                               hospital=hack_config.hospital,
-                              data_folder=hack_config.data_folder)
+                              data_folder=hack_config.data_folder,
+                              weather_columns=hack_config.weather_columns)
     print(data_loader.get_min_max())
     # future = data_loader.get_future_data()
     # print(future.size())

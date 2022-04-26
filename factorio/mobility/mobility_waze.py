@@ -1,22 +1,20 @@
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime
 
 
 class MobilityWaze:
     def __init__(self):
-        url = r'https://raw.githubusercontent.com/ActiveConclusion/' \
-              r'waze_mobility_scraper/master/Waze_City-Level_Data.csv'
+        url = r'https://raw.githubusercontent.com/ActiveConclusion/waze_mobility_scraper/master/Waze_City-Level_Data.csv'
         self.__reports_df = pd.read_csv(url)
 
     def get_mobility(self,
                      start_date=datetime(2020, 8, 31),
-                     end_date=datetime(2021, 11, 18, 23, 59)):
+                     end_date=datetime.now()):
         mobility = self.__reports_df.loc[self.__reports_df['Country'] == "Czechia"]
         mobility = mobility[mobility['City'] == 'Prague']
         mobility = mobility.iloc[::-1]
         mobility = mobility[['Date',
                              '% Change In Waze Driven Miles/KMs']]
-
         hourly_mobility = {}
         for index, mob in mobility.iterrows():
             time = mob['Date'].split(", ")

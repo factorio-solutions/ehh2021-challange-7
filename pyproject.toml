@@ -1,0 +1,32 @@
+[tool.poetry]
+name = "zcase++"
+version = "2022.2.0"
+description = "zCase++ application"
+authors = ["Petr Cezner <petr.cezner@factorio.cz>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+configparser = ">=3.8.1"
+matplotlib = ">=3.3.4"
+numpy = ">=1.20.2"
+pandas = ">=1.3.4"
+pytorch-lightning = "^1.6.1"
+torch = ">=1.8.1"
+requests = ">=2.25.1"
+gpytorch = ">=1.5.0"
+tqdm = ">=4.60.0"
+meteostat = ">=1.5.10"
+beautifulsoup4 = ">=4.10.0"
+scikit-learn = ">=0.24.2"
+pyro-ppl = "^1.8.1"
+streamlit-autorefresh = "^0.0.1"
+streamlit = "^1.8.1"
+plotly = "^5.7.0"
+colorlog = "^6.6.0"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
