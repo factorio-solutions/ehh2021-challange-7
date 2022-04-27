@@ -7,7 +7,7 @@ services:
     image:  zcaseplus:2022.2.0
     restart: always
     volumes:
-      - F:/ZCASE_logs:/app/mnt/logs/
+      - /home/petr/Projects/ehh2021-challange-7/mnt/logs:/app/mnt/logs/
     deploy:
       resources:
         limits:

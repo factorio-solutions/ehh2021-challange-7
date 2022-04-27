@@ -23,8 +23,8 @@ COPY pyproject.toml /app/
 COPY factorio/. /app/factorio
 COPY mnt/ikem/. /app/mnt/ikem
 
-COPY mnt/scaler.pkl /app/mnt/scaler.pkl
-COPY mnt/model_state*.pth /app/mnt/
+COPY factorio/learnedmodels/scaler.pkl /app/learnedmodels/scaler.pkl
+COPY factorio/learnedmodels/model_state*.pth /app/learnedmodels/
 
 RUN poetry config virtualenvs.create false \
   && poetry install --no-dev --no-interaction --no-ansi

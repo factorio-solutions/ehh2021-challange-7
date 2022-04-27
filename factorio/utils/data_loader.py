@@ -1,6 +1,5 @@
 import abc
 import datetime
-import functools
 import glob
 from pathlib import Path
 import warnings
@@ -8,7 +7,7 @@ import warnings
 from pandas.core.common import SettingWithCopyWarning
 from pandas.errors import DtypeWarning
 
-from factorio.mobility.mobility_apple import MobilityApple
+# from factorio.mobility.mobility_apple import MobilityApple
 from factorio.mobility.mobility_google import MobilityGoogle
 from factorio.mobility.mobility_waze import MobilityWaze
 from factorio.utils.hack_config import HackConfig
@@ -113,7 +112,7 @@ class DataFactory(AbstractFactory):
         selected_data = data[self.weather_columns]
         selected_data.insert(0, 'hour', selected_data.index.hour)
         selected_data.insert(1, 'day in week', selected_data.index.weekday)
-        selected_data.insert(2, 'dayofyear', selected_data.index.dayofyear)
+        selected_data.insert(2, 'month', selected_data.index.month)
 
         google, waze = self._load_mobility(start_date, end_date)
 
@@ -134,109 +133,29 @@ class DataFactory(AbstractFactory):
     def inverse_transform(self, X: torch.Tensor):
         return self.scaler.inverse_transform(X.numpy())
 
-    # def get_future_data(self, hour: int = 2, dtype=torch.float):
-    #     c_date = datetime.datetime.now()
-    #     h_weather = HistoricalWeather()
-    #     to_past = 24 - hour
-    #     index = pd.date_range(start=c_date - datetime.timedelta(hours=to_past),
-    #                           end=c_date + datetime.timedelta(hours=hour),
-    #                           freq=f"{self.data_frequency}min")
-    #     index = [pd.to_datetime(date) for date in index]
-    #     football_data = pd.DataFrame.from_dict(self.football.get_visitors(index[0] - datetime.timedelta(days=365),
-    #                                                                       index[-1] + datetime.timedelta(days=1)),
-    #                                            orient='index').loc[index[0] + datetime.timedelta(hours=1):index[-1]]
-    #     google, apple, waze = self.__load_mobility(index[0] - datetime.timedelta(days=7),
-    #                                                index[-1] - datetime.timedelta(days=7))
-    #     incidence = self.__load_incidence(index[0] - datetime.timedelta(days=7),
-    #                                       index[-1] - datetime.timedelta(days=7))
-    #     data = h_weather.get_temperature(c_date - datetime.timedelta(hours=to_past),
-    #                                      c_date + datetime.timedelta(hours=hour))
-    #     df = data[['temp', 'rhum', 'pres']]
-    #     df.insert(0, 'hour', df.index.hour)
-    #     df.insert(1, 'day in week', df.index.weekday)
-    #     df.insert(2, 'dayofyear', df.index.dayofyear)
-    #     df.reset_index(drop=True, inplace=True)
-    #     football_data.reset_index(drop=True, inplace=True)
-    #     google.reset_index(drop=True, inplace=True)
-    #     apple.reset_index(drop=True, inplace=True)
-    #     waze.reset_index(drop=True, inplace=True)
-    #     incidence.reset_index(drop=True, inplace=True)
-    #     df = df.join(football_data)
-    #     df = df.join(google[['retail_and_recreation_percent_change_from_baseline',
-    #                          'residential_percent_change_from_baseline']])
 
-    #     df = df.join(waze['waze'])
-    #     df = df.join(apple['apple'])
-    #     df = df.join(incidence['incidence_7_100000'])
-    #     return torch.as_tensor(self.scaler.transform(df.values)).to(dtype)
+class OnlineFactory(AbstractFactory):
+    def __init__(self, data_frequency, hospital, data_folder, weather_columns):
+        super().__init__(data_frequency=data_frequency,
+                         hospital=hospital,
+                         data_folder=data_folder,
+                         weather_columns=weather_columns)
 
-
-class OnlineFactory:
-    def __init__(self, data_frequency, hospital, teams, data_folder, dtype=torch.float):
-        self.teams = teams
-        self.hospital = hospital
-        self.data_frequency = data_frequency
-        self.covid_source = r'https://onemocneni-aktualne.mzcr.cz/api/v2/covid-19/'
-        self.data_folder = data_folder
-        self.scaler = MinMaxScaler()
-        self.end_date = datetime.datetime(2021, 11, 15, 23, 55, 0)
-        self.start_date = datetime.datetime(2017, 1, 1, 3)
-        self.football = Football(self.teams)
-        self.g_reports = [str(self.data_folder / '2020_CZ_Region_Mobility_Report.csv'),
-                          str(self.data_folder / '2021_CZ_Region_Mobility_Report.csv')]
-
-        self.google_m = MobilityGoogle(reports=self.g_reports)
-        self.apple_m = MobilityApple()
-        self.waze_m = MobilityWaze()
-
-    def __load_mobility(self, start_date, end_date):
-        google = pd.DataFrame.from_dict(self.google_m.get_mobility(), orient='index')
-        google = google[start_date:end_date]
-
-        apple = pd.DataFrame.from_dict(self.apple_m.get_mobility(), orient='index')
-        apple = apple[start_date:end_date]
-
-        waze = pd.DataFrame.from_dict(self.waze_m.get_mobility(), orient='index')
-        waze = waze[start_date:end_date]
-        apple.fillna(0, inplace=True)
-        waze = waze.resample(f'{self.data_frequency}min').ffill()
-        apple = apple.resample(f'{self.data_frequency}min').ffill()
-        google = google.resample(f'{self.data_frequency}min').ffill()
-        waze.columns = ['waze']
-        apple.columns = ['apple']
-        return google, apple, waze
-
-    def __load_incidence(self, start_date, end_date):
-        data_incidence = pd.read_csv(rf'{self.covid_source}incidence-7-14-cr.csv')
-        data_incidence.dropna(inplace=True)
-        data_incidence['datum'] = pd.to_datetime(data_incidence['datum'])
-        data_incidence.set_index('datum', drop=True, inplace=True)
-        return data_incidence.resample(f'{self.data_frequency}min').ffill()[start_date:end_date]
-    
-    @functools.lru_cache(maxsize=5, typed=False)
     def get_prediction_data(self, c_date, to_future: int = 2, to_past: int = 24, dtype=torch.float):
         h_weather = HistoricalWeather()
-        # to_past -= to_future
         index = pd.date_range(start=c_date - datetime.timedelta(hours=to_past),
                               end=c_date + datetime.timedelta(hours=to_future),
                               freq=f"{self.data_frequency}min")
         index = [pd.to_datetime(date) for date in index]
-        football_data = pd.DataFrame.from_dict(self.football.get_visitors(index[0] - datetime.timedelta(days=365),
-                                                                          index[-1] + datetime.timedelta(days=1)),
-                                               orient='index').loc[index[0] + datetime.timedelta(hours=1):index[-1]]
-        # We assume the state 7 days ago affect today arrivals
-        google, apple, waze = self.__load_mobility(index[0] - datetime.timedelta(days=7),
-                                                   index[-1] - datetime.timedelta(days=7))
-        incidence = self.__load_incidence(index[0] - datetime.timedelta(days=7),
-                                          index[-1] - datetime.timedelta(days=7))
+
+        google, waze = self._load_mobility(index[0] - datetime.timedelta(days=7),
+                                           index[-1] - datetime.timedelta(days=7))
         data = h_weather.get_temperature(c_date - datetime.timedelta(hours=to_past),
                                          c_date + datetime.timedelta(hours=to_future))
-        df = data[['temp', 'rhum', 'pres']]
-        
-        df = df.diff()
+        df = data[self.weather_columns]
         df.insert(0, 'hour', df.index.hour)
         df.insert(1, 'day in week', df.index.weekday)
-        df.insert(2, 'dayofyear', df.index.dayofyear)
+        df.insert(2, 'month', df.index.month)
         df.reset_index(drop=True, inplace=True)
         google.reset_index(drop=True, inplace=True)
         # apple.reset_index(drop=True, inplace=True)
@@ -274,6 +193,3 @@ if __name__ == '__main__':
                               data_folder=hack_config.data_folder,
                               weather_columns=hack_config.weather_columns)
     print(data_loader.get_min_max())
-    # future = data_loader.get_future_data()
-    # print(future.size())
-    # print(future)
